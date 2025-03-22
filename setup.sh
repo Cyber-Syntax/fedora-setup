@@ -1,41 +1,52 @@
 #!/bin/bash
 # Author: Serif Cyber-Syntax
 # License: BSD 3-Clause
-# Comprehensive installation and configuration script for dnf-based systems.
-#
-# Additional functions can be run via command‑line options.
-#
-# Options:
-#   -a    Do everything (run all additional functions).
-#   -F    Install Flatpak packages.
-#   -l    Install Librewolf browser.
-#   -q    Install Qtile packages.
-#   -b    Install Brave Browser.
-#   -r    Enable RPM Fusion repositories.
-#   -s    Setup system services (borgbackup, trash-cli).
-#   -d    Speed up DNF (update /etc/dnf/dnf.conf with pkg_gpgcheck and max_parallel_downloads).
-#   -x    Swap ffmpeg-free with ffmpeg.
-#   -f    Overwrite configuration files (boot, GDM, sysctl, sudoers).
-#   -L    Install Lazygit.
-#
-# New options for experimental / testing functions:
-#   -g    Remove GNOME desktop environment (but keep NetworkManager).
-#   -z    Setup zenpower for Ryzen 5000 series (TEST: might need to blacklist k10temp).
-#   -n    Install CUDA and NVIDIA proprietary drivers (TEST: experimental NVIDIA/CUDA setup).
-#   -v    Setup VA-API for NVIDIA RTX series (TEST: install required packages and set env).
-#   -p    Install ProtonVPN repository and enable OpenVPN for SELinux (TEST: experimental VPN setup).
-#   -u    Run system updates (dnf autoremove, fwupdmgr commands).
-#
-#   -o    Setup Ollama.
-#   -h    Display this help message.
-#
-# Example (run as root):
-#   sudo ./script.sh -a
-#
+# Comprehensive installation and configuration script
+#for dnf-based systems.
 
 # Bash settings for strict error checking.
 set -euo pipefail
 IFS=$'\n\t'
+
+# Source additional functions from separate files.
+source general_func.sh
+source desktop_func.sh
+source general_app.sh
+
+# VARIABLES (general used like username, borgbackup location etc.)
+# NOTE: Change these variables as needed.
+USER="developer"
+hostname_desktop="fedora"
+hostname_laptop="fedora-laptop"
+boot_file="/etc/default/grub"
+tcp_bbr="/etc/sysctl.d/99-tcp-bbr.conf"
+sudoers_file="/etc/sudoers.d/terminal_timeout"
+
+# borg variables
+borgbackup_timer="/etc/systemd/system/borgbackup-home.timer"
+borgbackup_service="/etc/systemd/system/borgbackup-home.service"
+borgbackup_script="$HOME/Documents/scripts/desktop/borg/home-borgbackup.sh"
+move_opt_dir="/opt/borg/home-borgbackup.sh"
+
+# trash-cli variables
+trash_cli_service="/etc/systemd/system/trash-cli.service"
+trash_cli_timer="/etc/systemd/system/trash-cli.timer"
+
+# Variable notifying the user that the script is running.
+if ! id "$USER" &>/dev/null; then
+  echo "WARNING: You forget to change variables according to your needs."
+  # Check if user forgot to change the VARIABLES.
+  if [ -n "$SUDO_USER" ]; then
+    whoami="$SUDO_USER"
+  else
+    whoami=$(whoami)
+  fi
+
+  echo "Script USER variable is: $USER but your username: $whoami."
+  echo "Please change the USER variable and other variables according to your system configuration."
+
+  exit 1
+fi
 
 # Check if the script is run as root.
 check_root() {
@@ -49,29 +60,36 @@ check_root() {
 usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
+WARNING: I am not responsible for any damage caused by this script. 
+Use it with caution. This script is need root privileges which can be dangerous.
+Please, always review the script before running it.
 
-Use this script to install and configure packages on Fedora-based systems.
+NOTE: Please change the variables as your system configuration.
+
+This scripts automates the installation and configuration of Fedora-based systems.
 
 Options:
-  -a    Do everything (execute all additional functions).
+  -a    Execute all functions. (NOTE:System detection handled by hostname)
+  -b    Install Brave Browser.
+  -B    Setup borgbackup service.
+  -t    Setup trash-cli service.
+  -f    Setup useful linux configurations (boot timeout, tcp_bbr, terminal password timeout).
   -F    Install Flatpak packages.
   -l    Install Librewolf browser.
-  -q    Install Qtile packages.
-  -b    Install Brave Browser.
-  -r    Enable RPM Fusion repositories.
-  -s    Setup system services (borgbackup, trash-cli).
-  -d    Speed up DNF (e.g., set max_parallel_downloads, pkg_gpgcheck, etc.).
-  -x    Swap ffmpeg-free with ffmpeg.
-  -f    Overwrite configuration files (boot, GDM, sysctl, sudoers).
   -L    Install Lazygit.
-  
-  -g    Remove GNOME desktop environment (keep NetworkManager).
-  -z    Setup zenpower for Ryzen 5000 series (TEST: might need to blacklist k10temp).
-  -n    Install CUDA and NVIDIA proprietary drivers (TEST: experimental NVIDIA/CUDA setup).
-  -v    Setup VA-API for NVIDIA RTX series (TEST: install required packages and set env).
-  -p    Install ProtonVPN repository and enable OpenVPN for SELinux (TEST: experimental VPN setup).
+  -q    Install Qtile packages.
+  -r    Enable RPM Fusion repositories.
+  -d    Speed up DNF (set max_parallel_downloads, pkg_gpgcheck, etc.).
+  -x    Swap ffmpeg-free with ffmpeg.
   -u    Run system updates (autoremove, fwupdmgr commands).
-  -o    Setup Ollama.
+WARNING: Below functions are need to tested with caution.
+  -g    Remove GNOME desktop environment (keep NetworkManager).
+  -z    Setup zenpower for Ryzen 5000 series
+  -n    Install NVIDIA CUDA
+  -N    Switch to nvidia-open drivers
+  -v    Setup VA-API for NVIDIA RTX series
+  -p    Install ProtonVPN repository and enable OpenVPN for SELinux
+  -o    Install Ollama with its install.sh script
   -h    Display this help message.
 
 Example:
@@ -80,24 +98,19 @@ EOF
   exit 1
 }
 
-# Source additional functions from separate files.
-source general_func.sh
-source desktop_func.sh
-source general_app.sh
-
 # Detect system type based on hostname.
 detect_system_type() {
   local hostname
   hostname=$(hostname)
+  echo "Detected hostname: $hostname"
 
-  if [[ "$hostname" == "fedora-laptop" ]]; then
+  if [[ "$hostname" == "$hostname_desktop" ]]; then
+    echo "desktop"
+  elif [[ "$hostname" == "$hostname_laptop" ]]; then
     echo "laptop"
-  elif [[ "$hostname" == "fedora" ]]; then
-    echo "desktop"
   else
-    echo "unknown"
-    echo "Warning: Unknown hostname. Defaulting to desktop configuration." >&2
-    echo "desktop"
+    echo "Error: Unknown hostname. Please check the hostname." >&2
+    exit 1
   fi
 }
 
@@ -170,8 +183,6 @@ install_qtile_packages() {
 #TEST: Currently only for desktop
 borgbackup_setup() {
   # send sh script to /opt/borg/home-borgbackup.sh
-  local borgbackup_script="~/Documents/scripts/desktop/borg/home-borgbackup.sh"
-  local move_opt_dir="/opt/borg/home-borgbackup.sh"
   echo "Moving borgbackup script to /opt/borg/home-borgbackup.sh..."
 
   # Check directory, create if not exists
@@ -182,7 +193,6 @@ borgbackup_setup() {
   mv "$borgbackup_script" "$move_opt_dir"
 
   echo "Setting up borgbackup service..."
-  local borgbackup_service="/etc/systemd/system/borgbackup-home.service"
   cat <<EOF >"$borgbackup_service"
 [Unit]
 Description=Home Backup using BorgBackup
@@ -192,7 +202,6 @@ Type=oneshot
 ExecStart=/opt/borg/home-borgbackup.sh
 EOF
 
-  local borgbackup_timer="/etc/systemd/system/borgbackup-home.timer"
   cat <<EOF >"$borgbackup_timer"
 [Unit]
 Description=Timer for Home Backup using BorgBackup
@@ -218,7 +227,6 @@ EOF
 #TEST: Both desktop and laptop
 trash_cli_setup() {
   echo "Setting up trash-cli service..."
-  local trash_cli_service="/etc/systemd/system/trash-cli.service"
   cat <<EOF >"$trash_cli_service"
 [Unit]
 Description=Trash-cli cleanup service
@@ -234,7 +242,6 @@ ExecStart=/usr/bin/trash-empty 30
 # No Restart option here because this is a one-shot service.
 EOF
 
-  local trash_cli_timer="/etc/systemd/system/trash-cli.timer"
   cat <<EOF >"$trash_cli_timer"
 [Unit]
 Description=Daily timer for trash-cli cleanup
@@ -256,14 +263,30 @@ EOF
   echo "trash-cli service setup completed."
 }
 
+# Autologin for gdm
+#NOTE: currently backlog
+#TODO: Need to make $USER variable
+gdm_auto_login() {
+  echo "Setting up autologin for GDM..."
+  local gdm_custom="/etc/gdm/custom.conf"
+  echo "Overwriting GDM configuration ($gdm_custom)..."
+  cat <<EOF >"$gdm_custom"
+[daemon]
+WaylandEnable=false
+DefaultSession=qtile.desktop
+AutomaticLoginEnable=True
+AutomaticLogin=developer
+EOF
+  echo "GDM autologin setup completed."
+}
+
 # Overwrites various configuration files.
-# TEST: This function configures boot (GRUB), GDM, sysctl for TCP/BBR, and sudoers.
+# TEST: This function configures boot (GRUB), sysctl for TCP/BBR, and sudoers.
 setup_files() {
   local system_type="$1"
   echo "Setting up configuration files for $system_type..."
 
   # 1. Boot configuration (common for both systems)
-  local boot_file="/etc/default/boot"
   echo "Overwriting boot configuration ($boot_file) with GRUB_TIMEOUT=0..."
   echo "GRUB_TIMEOUT=0" >"$boot_file"
   echo "Regenerating GRUB configuration..."
@@ -289,7 +312,7 @@ auth        include     system-login
 EOF
 
   # 3. Increase internet speed with TCP/BBR (common for both systems).
-  local tcp_bbr="/etc/sysctl.d/99-tcp-bbr.conf"
+
   echo "Overwriting network settings ($tcp_bbr)..."
   cat <<EOF >"$tcp_bbr"
 net.core.default_qdisc=fq
@@ -304,7 +327,7 @@ EOF
 
   # 4. Sudoers snippet (common for both systems).
   # WARN: Is it secure to give this?
-  local sudoers_file="/etc/sudoers.d/terminal_timeout"
+
   echo "Creating/updating sudoers snippet ($sudoers_file)..."
   cat <<EOF >"$sudoers_file"
 ## Allow borgbackup script to run without password
@@ -319,17 +342,17 @@ EOF
   echo "Configuration files have been updated for $system_type."
 }
 
-# Group for passwordless login
-#TEST:
+#TEST: Group for passwordless login
 nopasswdlogin_group() {
   echo "Creating group for passwordless login..."
-  groupadd -r nopasswdlogin
-  groupadd -r autologin
-  gpasswd -a username nopasswdlogin
-  gpasswd -a username autologin
+  groupadd -r nopasswdlogin 2>/dev/null || echo "Group 'nopasswdlogin' already exists."
+  groupadd -r autologin 2>/dev/null || echo "Group 'autologin' already exists."
+  # CHANGED: Replaced literal "username" with the USER variable for consistency.
+  gpasswd -a "$USER" nopasswdlogin
+  gpasswd -a "$USER" autologin
   echo "Group created for passwordless login."
   echo "Add users to the nopasswdlogin group to enable passwordless login."
-  usermod -aG nopasswdlogin,autologin developer
+  usermod -aG nopasswdlogin,autologin "$USER"
 }
 
 # Switch from firewalld to UFW.
@@ -376,31 +399,67 @@ zenpower_setup() {
   echo "Setting up zenpower for Ryzen 5000 series..."
   dnf copr enable shdwchn10/zenpower3 -y
   dnf install -y zenpower3 zenmonitor3
+  # blacklisting k10temp
+  echo "blacklist k10temp" >/etc/modprobe.d/zenpower.conf
   echo "Zenpower setup completed. (TEST: Check if k10temp needs to be blacklisted.)"
 }
 
-# TEST: Install CUDA and NVIDIA proprietary drivers.
-# This function adds the CUDA repository and installs the cuda-toolkit.
+# TEST: Install CUDA
 nvidia_cuda_setup() {
-  echo "Setting up NVIDIA CUDA and proprietary drivers..."
-  # Note: Adjust repository URL if needed. This is experimental.
-  dnf config-manager --add-repo=https://developer.download.nvidia.com/compute/cuda/repos/fedora$(rpm -E %fedora)/$(uname -m)/cuda-fedora$(rpm -E %fedora).repo
+  # https://rpmfusion.org/Howto/CUDA#Installation
+  dnf config-manager addrepo --from-repofile=https://developer.download.nvidia.com/compute/cuda/repos/fedora41/$(uname -m)/cuda-fedora41.repo
   dnf clean all
-  dnf install -y cuda-toolkit
-  echo "CUDA toolkit installation completed. (TEST: Verify if NVIDIA drivers are properly configured.)"
+  # This nvidia-driver not found in fedora 41?
+  dnf module disable nvidia-driver
+  dnf config-manager setopt cuda-fedora41-$(uname -m).exclude=nvidia-driver,nvidia-modprobe,nvidia-persistenced,nvidia-settings,nvidia-libXNVCtrl,nvidia-xconfig
+  dnf -y install cuda-toolkit
+  #TODO: check later is below package installed or not:
+  #xorg-x11-drv-nvidia-cuda-libs
+}
+
+# TEST: Switch nvidia-open
+switch_nvidia_open() {
+  #https://rpmfusion.org/Howto/NVIDIA?highlight=%28%5CbCategoryHowto%5Cb%29#Kernel_Open
+  echo "Switching to nvidia-open drivers..."
+  # dnf install akmod-nvidia-open
+  # dnf swap akmod-nvidia akmod-nvidia-open
+  # # build the modules
+  # akmods --rebuild --force
+
+  # Rpm package not work therefore build akmod-nvidia with open
+  echo "%_with_kmod_nvidia_open 1" >/etc/rpm/macros.nvidia-kmod
+  # If this still not work,add --force in the end
+  akmods --kernels $(uname -r) --rebuild
+
+  #TEST: Those are probably added default by fedora on 41
+  #   local modeset="/etc/modprobe.d/nvidia-modeset.conf"
+  #   cat <<EOF >"$modeset"
+  # options nvidia-drm modeset=1 fbdev=1
+  # EOF
+  # to enable old powersave mode
+  # NVreg_PreserveVideoMemoryAllocations=0
+
+  #Disable nonfree nvidia driver
+  dnf --disablerepo rpmfusion-nonfree-nvidia-driver
+  echo "Wait 10-20 minutes(being paronoid) for the nvidia-open modules to build than reboot. 
+  Check after reboot: modinfo nvidia | grep license
+  Correct output: Dual MIT/GPL 
+  Also check: rpm -qa kmod-nvidia\*
+  Correct output: kmod-nvidia-open-6.13.7-200.fc41.x86_64-570.124.04-1.fc41.x86_64
+  "
 }
 
 # TEST: Setup VA-API for NVIDIA RTX series.
-# This function installs dependencies for VA-API video decoding and sets environment variables.
 vaapi_setup() {
   echo "Setting up VA-API for NVIDIA RTX series..."
   dnf install -y meson libva-devel gstreamer1-plugins-bad-freeworld nv-codec-headers nvidia-vaapi-driver gstreamer1-plugins-bad-free-devel
-  # Optionally, add environment variables (modify /etc/environment if needed).
-  echo "Setting LIBVA_DRIVER_NAME=nvidia in /etc/environment..."
-  if ! grep -q "LIBVA_DRIVER_NAME=nvidia" /etc/environment; then
-    echo "LIBVA_DRIVER_NAME=nvidia" >>/etc/environment
-  fi
-  echo "VA-API setup completed. (TEST: Run vainfo to verify video decoding support.)"
+  # setup vaapi for firefox
+  cat <<EOF >>/etc/environment
+MOZ_DISABLE_RDD_SANDBOX=1
+LIBVA_DRIVER_NAME=nvidia
+__GLX_VENDOR_LIBRARY_NAME=nvidia
+EOF
+  echo "VA-API setup completed."
 }
 
 # TEST: Install ProtonVPN repository and enable OpenVPN for SELinux.
@@ -466,29 +525,29 @@ main() {
   qtile_option=false
   brave_option=false
   rpm_option=false
-  service_option=false
   dnf_speed_option=false
   swap_ffmpeg_option=false
   config_option=false
   lazygit_option=false
   ollama_option=false
   trash_cli_option=false
-  borgbackup_setup=false
+  borgbackup_option=false
 
   # New experimental option flags.
   remove_gnome_option=false
   zenpower_option=false
+  switch_nvidia_open_option=false
   nvidia_cuda_option=false
   vaapi_option=false
   protonvpn_option=false
   update_system_option=false
 
   # Process command-line options.
-  while getopts "aFlLqbrsdxfogznvpuotBh" opt; do
+  while getopts "aFlLqbrdxfogznvpuotBh" opt; do
     case $opt in
     a) all_option=true ;;
     b) brave_option=true ;;
-    B) borgbackup_setup=true ;;
+    B) borgbackup_option=true ;;
     d) dnf_speed_option=true ;;
     F) flatpak_option=true ;;
     f) config_option=true ;;
@@ -496,11 +555,11 @@ main() {
     L) lazygit_option=true ;;
     q) qtile_option=true ;;
     r) rpm_option=true ;;
-    s) service_option=true ;;
     x) swap_ffmpeg_option=true ;;
     o) ollama_option=true ;;
     g) remove_gnome_option=true ;;
     n) nvidia_cuda_option=true ;;
+    N) switch_nvidia_open_option=true ;;
     v) vaapi_option=true ;;
     p) protonvpn_option=true ;;
     t) trash_cli_option=true ;;
@@ -514,13 +573,12 @@ main() {
   # If no optional flags were provided, show usage and exit.
   if [[ "$all_option" == "false" ]] &&
     [[ "$flatpak_option" == "false" ]] &&
-    [[ "$borgbackup_setup" == "false" ]] &&
+    [[ "$borgbackup_option" == "false" ]] &&
     [[ "$trash_cli_option" == "false" ]] &&
     [[ "$librewolf_option" == "false" ]] &&
     [[ "$qtile_option" == "false" ]] &&
     [[ "$brave_option" == "false" ]] &&
     [[ "$rpm_option" == "false" ]] &&
-    [[ "$service_option" == "false" ]] &&
     [[ "$dnf_speed_option" == "false" ]] &&
     [[ "$swap_ffmpeg_option" == "false" ]] &&
     [[ "$config_option" == "false" ]] &&
@@ -529,6 +587,7 @@ main() {
     [[ "$remove_gnome_option" == "false" ]] &&
     [[ "$zenpower_option" == "false" ]] &&
     [[ "$nvidia_cuda_option" == "false" ]] &&
+    [[ "$switch_nvidia_open_option" == "false" ]] &&
     [[ "$vaapi_option" == "false" ]] &&
     [[ "$protonvpn_option" == "false" ]] &&
     [[ "$update_system_option" == "false" ]]; then
@@ -541,7 +600,7 @@ main() {
 
   # Determine if core packages are needed.
   local need_core_packages=false
-  if $all_option || $qtile_option || $service_option; then
+  if $all_option || $qtile_option || $trash_cli_option; then
     need_core_packages=true
   fi
 
@@ -581,10 +640,11 @@ main() {
     elif [[ "$system_type" == "desktop" ]]; then
       echo "Executing desktop-specific functions..."
       # Desktop-specific functions could be added here.
+      switch_nvidia_open
+      nvidia_cuda_setup
+      vaapi_setup
       borgbackup_setup
       zenpower_setup #WARN: is it safe?
-      nvidia_cuda_setup
-      vaapi_option
     fi
 
   else
@@ -604,6 +664,7 @@ main() {
     if $remove_gnome_option; then remove_gnome; fi
     if $zenpower_option; then zenpower_setup; fi
     if $nvidia_cuda_option; then nvidia_cuda_setup; fi
+    if $switch_nvidia_open_option; then switch_nvidia_open; fi
     if $vaapi_option; then vaapi_setup; fi
     if $protonvpn_option; then install_protonvpn; fi
     if $update_system_option; then system_updates; fi
