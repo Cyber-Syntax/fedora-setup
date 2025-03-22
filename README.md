@@ -1,6 +1,7 @@
 # **⚠️ WARNING**
 
-I am not responsible for any damage caused by this script. Use it with caution. This script is need root privileges which can be dangerous. Please, always review the script before running it.
+I AM NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY THIS SCRIPT. USE AT YOUR OWN RISK.
+This script is need root privileges which can be dangerous. Please, always review the script before running it.
 
 I am currently testing this script on Fedora 41 and I am going to make sure everything is working as expected.
 
@@ -11,11 +12,15 @@ Basically, saving time. Also, I enjoy scripting and wrote this in bash for learn
 # How to use the script
 
 ```bash
-WARNING: I am not responsible for any damage caused by this script.
-Use it with caution. This script is need root privileges which can be dangerous.
+WARNING:
+I AM NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY THIS SCRIPT. USE AT YOUR OWN RISK.
+This script is need root privileges which can be dangerous.
 Please, always review the script before running it.
 
-Use this script to install and configure packages on Fedora-based systems.
+NOTE: Please change the variables as your system configuration.
+
+This scripts automates the installation and configuration on Fedora Linux.
+
 
 Options:
 -a Execute all functions. (NOTE:System detection handled by hostname)

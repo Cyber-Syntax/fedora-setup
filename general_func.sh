@@ -2,7 +2,7 @@
 
 # Tweaks DNF configuration to improve performance.
 speed_up_dnf() {
-  echo "Configuring DNF for improved performance..."
+  echo "Configuring DNF for improve performance..."
   local dnf_conf="/etc/dnf/dnf.conf"
   # Backup current dnf.conf if no backup exists.
   if [[ ! -f "${dnf_conf}.bak" ]]; then
@@ -17,6 +17,23 @@ speed_up_dnf() {
   grep -q '^retries=5' "$dnf_conf" || echo 'retries=5' >>"$dnf_conf"
 
   echo "DNF configuration updated."
+}
+
+# Switch from firewalld to UFW.
+switch_ufw_setup() {
+  echo "Switching to UFW from firewalld..."
+  systemctl disable --now firewalld
+  systemctl enable --now ufw
+  echo "UFW installation completed."
+  echo "Updating UFW rules..."
+  ufw default deny incoming
+  ufw default allow outgoing
+  ufw allow from 192.168.1.0/16
+  ufw allow ssh
+  echo "Opening ports for Syncthing..."
+  ufw allow 22000
+  ufw allow 21027/udp
+  echo "Syncthing ports opened. Check UFW status with 'ufw status verbose'."
 }
 
 # Swaps ffmpeg-free with ffmpeg if ffmpeg-free is installed.

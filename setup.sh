@@ -12,25 +12,7 @@ IFS=$'\n\t'
 source general_func.sh
 source desktop_func.sh
 source general_app.sh
-
-# VARIABLES (general used like username, borgbackup location etc.)
-# NOTE: Change these variables as needed.
-USER="developer"
-hostname_desktop="fedora"
-hostname_laptop="fedora-laptop"
-boot_file="/etc/default/grub"
-tcp_bbr="/etc/sysctl.d/99-tcp-bbr.conf"
-sudoers_file="/etc/sudoers.d/terminal_timeout"
-
-# borg variables
-borgbackup_timer="/etc/systemd/system/borgbackup-home.timer"
-borgbackup_service="/etc/systemd/system/borgbackup-home.service"
-borgbackup_script="$HOME/Documents/scripts/desktop/borg/home-borgbackup.sh"
-move_opt_dir="/opt/borg/home-borgbackup.sh"
-
-# trash-cli variables
-trash_cli_service="/etc/systemd/system/trash-cli.service"
-trash_cli_timer="/etc/systemd/system/trash-cli.timer"
+source variables.sh
 
 # Variable notifying the user that the script is running.
 if ! id "$USER" &>/dev/null; then
@@ -60,13 +42,14 @@ check_root() {
 usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
-WARNING: I am not responsible for any damage caused by this script. 
-Use it with caution. This script is need root privileges which can be dangerous.
+WARNING: 
+I AM NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY THIS SCRIPT. USE AT YOUR OWN RISK.
+This script is need root privileges which can be dangerous.
 Please, always review the script before running it.
 
 NOTE: Please change the variables as your system configuration.
 
-This scripts automates the installation and configuration of Fedora-based systems.
+This scripts automates the installation and configuration on Fedora Linux. 
 
 Options:
   -a    Execute all functions. (NOTE:System detection handled by hostname)
@@ -104,6 +87,7 @@ detect_system_type() {
   hostname=$(hostname)
   echo "Detected hostname: $hostname"
 
+  #Make sure hostnames is correct
   if [[ "$hostname" == "$hostname_desktop" ]]; then
     echo "desktop"
   elif [[ "$hostname" == "$hostname_laptop" ]]; then
@@ -180,50 +164,6 @@ install_qtile_packages() {
   echo "Qtile packages installation completed."
 }
 
-#TEST: Currently only for desktop
-borgbackup_setup() {
-  # send sh script to /opt/borg/home-borgbackup.sh
-  echo "Moving borgbackup script to /opt/borg/home-borgbackup.sh..."
-
-  # Check directory, create if not exists
-  if [[ ! -d "/opt/borg" ]]; then
-    mkdir -p "/opt/borg"
-  fi
-  # move from ~/Documents/scripts/desktop/borg/home-borgbackup.sh
-  mv "$borgbackup_script" "$move_opt_dir"
-
-  echo "Setting up borgbackup service..."
-  cat <<EOF >"$borgbackup_service"
-[Unit]
-Description=Home Backup using BorgBackup
-
-[Service]
-Type=oneshot
-ExecStart=/opt/borg/home-borgbackup.sh
-EOF
-
-  cat <<EOF >"$borgbackup_timer"
-[Unit]
-Description=Timer for Home Backup using BorgBackup
-
-[Timer]
-# Schedules the backup at 10:00 every day.
-OnCalendar=*-*-* 10:00:00
-Persistent=true
-# Note: systemd timers work with local time. To follow Europe/Istanbul time, ensure your system’s timezone is set accordingly.
-
-[Install]
-WantedBy=timers.target
-EOF
-
-  echo "Reloading systemd..."
-  systemctl daemon-reload
-  echo "Enabling and starting borgbackup service..."
-  systemctl enable --now borgbackup-home.timer
-  echo "borgbackup service setup completed."
-
-}
-
 #TEST: Both desktop and laptop
 trash_cli_setup() {
   echo "Setting up trash-cli service..."
@@ -263,23 +203,6 @@ EOF
   echo "trash-cli service setup completed."
 }
 
-# Autologin for gdm
-#NOTE: currently backlog
-#TODO: Need to make $USER variable
-gdm_auto_login() {
-  echo "Setting up autologin for GDM..."
-  local gdm_custom="/etc/gdm/custom.conf"
-  echo "Overwriting GDM configuration ($gdm_custom)..."
-  cat <<EOF >"$gdm_custom"
-[daemon]
-WaylandEnable=false
-DefaultSession=qtile.desktop
-AutomaticLoginEnable=True
-AutomaticLogin=developer
-EOF
-  echo "GDM autologin setup completed."
-}
-
 # Overwrites various configuration files.
 # TEST: This function configures boot (GRUB), sysctl for TCP/BBR, and sudoers.
 setup_files() {
@@ -287,6 +210,11 @@ setup_files() {
   echo "Setting up configuration files for $system_type..."
 
   # 1. Boot configuration (common for both systems)
+  #backup
+  if [[ ! -f "$boot_file.bak" ]]; then
+    cp "$boot_file" "$boot_file.bak"
+  fi
+
   echo "Overwriting boot configuration ($boot_file) with GRUB_TIMEOUT=0..."
   echo "GRUB_TIMEOUT=0" >"$boot_file"
   echo "Regenerating GRUB configuration..."
@@ -294,25 +222,32 @@ setup_files() {
 
   # 2. Autologin lightdm
   local lightdm_custom="/etc/lightdm/lightdm.conf"
+  # backup
+  if [[ ! -f "$lightdm_custom.bak" ]]; then
+    cp "$lightdm_custom" "$lightdm_custom.bak"
+  fi
+
   echo "Overwriting LightDM configuration ($lightdm_custom) for $system_type..."
   #autologin-session=qtile.desktop
   cat <<EOF >"$lightdm_custom"
 [Seat:*]
-autologin-user=developer
+autologin-user=$USER
 EOF
 
   #TODO: pam setup needed on lightdm
   #WARN: This need to be appended to the file
   #TEST:
   local pam_lightdm="/etc/pam.d/lightdm"
+  # make a backup of the original file
+  if [[ ! -f "$pam_lightdm.bak" ]]; then
+    cp "$pam_lightdm" "$pam_lightdm.bak"
+  fi
   echo "Setting up PAM configuration for LightDM..."
-  cat <<EOF >>"$pam_lightdm"
-auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin
-auth        include     system-login
-EOF
+  # Append the following lines to the file.
+  grep -qxF 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' "$pam_lightdm" || echo 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' >>"$pam_lightdm"
+  grep -qxF 'auth        include     system-login' "$pam_lightdm" || echo 'auth        include     system-login' >>"$pam_lightdm"
 
   # 3. Increase internet speed with TCP/BBR (common for both systems).
-
   echo "Overwriting network settings ($tcp_bbr)..."
   cat <<EOF >"$tcp_bbr"
 net.core.default_qdisc=fq
@@ -327,7 +262,6 @@ EOF
 
   # 4. Sudoers snippet (common for both systems).
   # WARN: Is it secure to give this?
-
   echo "Creating/updating sudoers snippet ($sudoers_file)..."
   cat <<EOF >"$sudoers_file"
 ## Allow borgbackup script to run without password
@@ -355,111 +289,11 @@ nopasswdlogin_group() {
   usermod -aG nopasswdlogin,autologin "$USER"
 }
 
-# Switch from firewalld to UFW.
-switch_ufw_setup() {
-  echo "Switching to UFW from firewalld..."
-  systemctl disable --now firewalld
-  systemctl enable --now ufw
-  echo "UFW installation completed."
-  echo "Updating UFW rules..."
-  ufw default deny incoming
-  ufw default allow outgoing
-  ufw allow from 192.168.1.0/16
-  ufw allow ssh
-  echo "Opening ports for Syncthing..."
-  ufw allow 22000
-  ufw allow 21027/udp
-  echo "Syncthing ports opened. Check UFW status with 'ufw status verbose'."
-}
-
 # Change hostname for laptop.
 laptop_hostname_change() {
   echo "Changing hostname for laptop..."
-  local new_hostname="fedora-laptop"
-  hostnamectl set-hostname "$new_hostname"
-  echo "Hostname changed to $new_hostname."
-}
-
-# --- New functions from commented sections ---
-
-# TEST: Remove GNOME desktop environment while keeping NetworkManager.
-# This function removes common GNOME packages. It is experimental.
-#WARN: Make sure this won't delete NetworkManager
-#NOTE: Do not include this all_option
-remove_gnome() {
-  echo "Removing GNOME desktop environment..."
-  # Let user confirm the removal.
-  dnf remove gnome-shell gnome-session gnome-desktop
-  echo "GNOME desktop environment removed. (TEST: Verify that NetworkManager is still installed.)"
-}
-
-# TEST: Setup zenpower for Ryzen 5000 series.
-# This function enables the zenpower COPR repository and installs zenpower3 and zenmonitor3.
-zenpower_setup() {
-  echo "Setting up zenpower for Ryzen 5000 series..."
-  dnf copr enable shdwchn10/zenpower3 -y
-  dnf install -y zenpower3 zenmonitor3
-  # blacklisting k10temp
-  echo "blacklist k10temp" >/etc/modprobe.d/zenpower.conf
-  echo "Zenpower setup completed. (TEST: Check if k10temp needs to be blacklisted.)"
-}
-
-# TEST: Install CUDA
-nvidia_cuda_setup() {
-  # https://rpmfusion.org/Howto/CUDA#Installation
-  dnf config-manager addrepo --from-repofile=https://developer.download.nvidia.com/compute/cuda/repos/fedora41/$(uname -m)/cuda-fedora41.repo
-  dnf clean all
-  # This nvidia-driver not found in fedora 41?
-  dnf module disable nvidia-driver
-  dnf config-manager setopt cuda-fedora41-$(uname -m).exclude=nvidia-driver,nvidia-modprobe,nvidia-persistenced,nvidia-settings,nvidia-libXNVCtrl,nvidia-xconfig
-  dnf -y install cuda-toolkit
-  #TODO: check later is below package installed or not:
-  #xorg-x11-drv-nvidia-cuda-libs
-}
-
-# TEST: Switch nvidia-open
-switch_nvidia_open() {
-  #https://rpmfusion.org/Howto/NVIDIA?highlight=%28%5CbCategoryHowto%5Cb%29#Kernel_Open
-  echo "Switching to nvidia-open drivers..."
-  # dnf install akmod-nvidia-open
-  # dnf swap akmod-nvidia akmod-nvidia-open
-  # # build the modules
-  # akmods --rebuild --force
-
-  # Rpm package not work therefore build akmod-nvidia with open
-  echo "%_with_kmod_nvidia_open 1" >/etc/rpm/macros.nvidia-kmod
-  # If this still not work,add --force in the end
-  akmods --kernels $(uname -r) --rebuild
-
-  #TEST: Those are probably added default by fedora on 41
-  #   local modeset="/etc/modprobe.d/nvidia-modeset.conf"
-  #   cat <<EOF >"$modeset"
-  # options nvidia-drm modeset=1 fbdev=1
-  # EOF
-  # to enable old powersave mode
-  # NVreg_PreserveVideoMemoryAllocations=0
-
-  #Disable nonfree nvidia driver
-  dnf --disablerepo rpmfusion-nonfree-nvidia-driver
-  echo "Wait 10-20 minutes(being paronoid) for the nvidia-open modules to build than reboot. 
-  Check after reboot: modinfo nvidia | grep license
-  Correct output: Dual MIT/GPL 
-  Also check: rpm -qa kmod-nvidia\*
-  Correct output: kmod-nvidia-open-6.13.7-200.fc41.x86_64-570.124.04-1.fc41.x86_64
-  "
-}
-
-# TEST: Setup VA-API for NVIDIA RTX series.
-vaapi_setup() {
-  echo "Setting up VA-API for NVIDIA RTX series..."
-  dnf install -y meson libva-devel gstreamer1-plugins-bad-freeworld nv-codec-headers nvidia-vaapi-driver gstreamer1-plugins-bad-free-devel
-  # setup vaapi for firefox
-  cat <<EOF >>/etc/environment
-MOZ_DISABLE_RDD_SANDBOX=1
-LIBVA_DRIVER_NAME=nvidia
-__GLX_VENDOR_LIBRARY_NAME=nvidia
-EOF
-  echo "VA-API setup completed."
+  hostnamectl set-hostname "$hostname_laptop"
+  echo "Hostname changed to $hostname_laptop."
 }
 
 # TEST: Install ProtonVPN repository and enable OpenVPN for SELinux.
@@ -517,6 +351,10 @@ main() {
   if [[ "$#" -eq 1 && "$1" == "-h" ]]; then
     usage
   fi
+
+  # Initialize dnf speed first
+  #TODO: Is there a better way to do this?
+  speed_up_dnf
 
   # Initialize option flags.
   all_option=false
@@ -600,13 +438,8 @@ main() {
 
   # Determine if core packages are needed.
   local need_core_packages=false
-  if $all_option || $qtile_option || $trash_cli_option; then
+  if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option; then
     need_core_packages=true
-  fi
-
-  # Optimize DNF if core packages are required or if the user selected the DNF speed option.
-  if $need_core_packages || $dnf_speed_option; then
-    speed_up_dnf
   fi
 
   # Install core packages.
@@ -616,6 +449,23 @@ main() {
 
   if $all_option; then
     echo "Executing all additional functions..."
+
+    # System-specific additional functions.
+    if [[ "$system_type" == "laptop" ]]; then
+      echo "Executing laptop-specific functions..."
+      laptop_hostname_change
+      #TEST: Currently on laptop but can be used on globally when desktop switch lightdm
+      #TODO: write display-manager switch function
+      nopasswdlogin_group
+    elif [[ "$system_type" == "desktop" ]]; then
+      echo "Executing desktop-specific functions..."
+      # Desktop-specific functions could be added here.
+      switch_nvidia_open
+      nvidia_cuda_setup
+      vaapi_setup
+      borgbackup_setup
+      zenpower_setup #WARN: is it safe?
+    fi
 
     install_system_specific_packages "$system_type"
     install_flatpak_packages
@@ -632,20 +482,6 @@ main() {
     # Experimental functions.
     install_protonvpn
     system_updates
-
-    # System-specific additional functions.
-    if [[ "$system_type" == "laptop" ]]; then
-      echo "Executing laptop-specific functions..."
-      laptop_hostname_change
-    elif [[ "$system_type" == "desktop" ]]; then
-      echo "Executing desktop-specific functions..."
-      # Desktop-specific functions could be added here.
-      switch_nvidia_open
-      nvidia_cuda_setup
-      vaapi_setup
-      borgbackup_setup
-      zenpower_setup #WARN: is it safe?
-    fi
 
   else
     echo "Executing selected additional functions..."
