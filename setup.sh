@@ -13,6 +13,7 @@ source general_func.sh
 source desktop_func.sh
 source general_app.sh
 source variables.sh
+source packages.sh
 
 # Variable notifying the user that the script is running.
 if ! id "$USER" &>/dev/null; then
@@ -100,13 +101,17 @@ detect_system_type() {
 
 install_core_packages() {
   echo "Updating repositories..."
-  dnf update -y
+  dnf update -y || {
+    echo "Error: Failed to update repositories." >&2
+    return 1
+  }
 
-  echo "Installing core packages..."
-  for pkg in "${CORE_PACKAGES[@]}"; do
-    echo "Installing $pkg..."
-    dnf install -y "$pkg"
-  done
+  echo "Installing core packages in one command..."
+  dnf install -y "${CORE_PACKAGES[@]}" || {
+    echo "Error: Failed to install core packages." >&2
+    return 1
+  }
+
   echo "Core packages installation completed."
 }
 
@@ -115,17 +120,19 @@ install_system_specific_packages() {
 
   if [[ "$system_type" == "desktop" ]]; then
     echo "Installing desktop-specific packages..."
-    for pkg in "${DESKTOP_PACKAGES[@]}"; do
-      echo "Installing $pkg..."
-      dnf install -y "$pkg"
-    done
+    # one line install
+    dnf install -y "${DESKTOP_PACKAGES[@]}" || {
+      echo "Error: Failed to install desktop packages." >&2
+      return 1
+    }
     echo "Desktop packages installation completed."
   elif [[ "$system_type" == "laptop" ]]; then
     echo "Installing laptop-specific packages..."
-    for pkg in "${LAPTOP_PACKAGES[@]}"; do
-      echo "Installing $pkg..."
-      dnf install -y "$pkg"
-    done
+    # one line install
+    dnf install -y "${LAPTOP_PACKAGES[@]}" || {
+      echo "Error: Failed to install laptop packages." >&2
+      return 1
+    }
     echo "Laptop packages installation completed."
   else
     echo "Unknown system type. Skipping system-specific packages."
@@ -320,7 +327,15 @@ install_protonvpn() {
 # This function performs cleanup and firmware update checks.
 system_updates() {
   echo "Running system updates..."
-  dnf autoremove -y
+  for attempt in {1..3}; do
+    dnf autoremove -y && break
+    echo "Autoremove failed (attempt $attempt/3), retrying..."
+    sleep $((attempt * 5))
+  done || {
+    echo "Failed to complete autoremove after 3 attempts"
+    return 1
+  }
+
   fwupdmgr get-devices
   fwupdmgr refresh --force
   fwupdmgr get-updates -y
@@ -358,6 +373,7 @@ main() {
 
   # Initialize option flags.
   all_option=false
+  install_core_packages_option=false
   flatpak_option=false
   librewolf_option=false
   qtile_option=false
@@ -381,9 +397,10 @@ main() {
   update_system_option=false
 
   # Process command-line options.
-  while getopts "aFlLqbrdxfogznvpuotBh" opt; do
+  while getopts "aFlLqbrdxfogznvpuotBih" opt; do
     case $opt in
     a) all_option=true ;;
+    i) install_core_packages_option=true ;;
     b) brave_option=true ;;
     B) borgbackup_option=true ;;
     d) dnf_speed_option=true ;;
@@ -410,6 +427,7 @@ main() {
 
   # If no optional flags were provided, show usage and exit.
   if [[ "$all_option" == "false" ]] &&
+    [[ "$install_core_packages_option" == "false" ]] &&
     [[ "$flatpak_option" == "false" ]] &&
     [[ "$borgbackup_option" == "false" ]] &&
     [[ "$trash_cli_option" == "false" ]] &&
@@ -451,6 +469,7 @@ main() {
     echo "Executing all additional functions..."
 
     # System-specific additional functions.
+    #NOTE: This starts first to make sure hostname is changed first
     if [[ "$system_type" == "laptop" ]]; then
       echo "Executing laptop-specific functions..."
       laptop_hostname_change
@@ -467,17 +486,20 @@ main() {
       zenpower_setup #WARN: is it safe?
     fi
 
+    #FIXME: Unknown system type. Skipping system-specific packages.
     install_system_specific_packages "$system_type"
-    install_flatpak_packages
-    install_librewolf
-    install_qtile_packages
-    install_brave
     enable_rpm_fusion
-    install_lazygit
+    install_qtile_packages
     trash_cli_setup
     ffmpeg_swap
     setup_files "$system_type"
     switch_ufw_setup
+
+    # app installations
+    install_librewolf
+    install_brave
+    install_lazygit
+    install_flatpak_packages
 
     # Experimental functions.
     install_protonvpn
@@ -486,13 +508,14 @@ main() {
   else
     echo "Executing selected additional functions..."
     if $lazygit_option; then install_lazygit; fi
+    if $install_core_packages_option; then install_core_packages; fi
     if $flatpak_option; then install_flatpak_packages; fi
     if $librewolf_option; then install_librewolf; fi
     if $qtile_option; then install_qtile_packages; fi
     if $brave_option; then install_brave; fi
     if $rpm_option; then enable_rpm_fusion; fi
     if $trash_cli_option; then trash_cli_setup; fi
-    if $borgbackup_setup; then borgbackup_setup; fi
+    if $borgbackup_option; then borgbackup_setup; fi
     if $dnf_speed_option; then speed_up_dnf; fi
     if $swap_ffmpeg_option; then ffmpeg_swap; fi
     if $ollama_option; then install_ollama; fi

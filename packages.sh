@@ -5,27 +5,26 @@ CORE_PACKAGES=(
   zsh-syntax-highlighting
   zsh
   vim
-  ufw                  # Firewall; Fedora defaults to firewalld
-  zoxide               # Enhanced directory navigation
-  eza                  # Modern ls replacement
-  fd-find              # Faster file search
-  trash-cli            # Command-line trash utility
-  lm_sensors           # Hardware sensor monitoring
-  htop                 # Process viewer
-  btop                 # Resource monitor
-  pip                  # Python package installer
-  keepassxc            # Password manager
-  neovim               # Modern text editor
-  vim                  # Text editor
-  luarocks             # Lua package manager
-  cargo                # Rust package manager
-  bash-language-server # Bash language server
-  syncthing            # File synchronization
-  borgbackup           # Backup utility
-  seahorse             # GNOME keyring manager
+  ufw
+  zoxide
+  eza
+  fd-find
+  trash-cli
+  lm_sensors
+  htop
+  btop
+  pip
+  keepassxc
+  neovim
+  vim
+  luarocks
+  cargo
+  bash-language-server
+  syncthing
+  borgbackup
+  seahorse
   xournalpp
   kitty
-  # coding
   ruff
 )
 

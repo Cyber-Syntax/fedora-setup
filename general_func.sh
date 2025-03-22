@@ -9,7 +9,7 @@ speed_up_dnf() {
     cp "$dnf_conf" "${dnf_conf}.bak"
   fi
   # Append settings if not already present.
-  grep -q '^max_parallel_downloads=20' "$dnf_conf" || echo 'max_parallel_downloads=10' >>"$dnf_conf"
+  grep -q '^max_parallel_downloads=20' "$dnf_conf" || echo 'max_parallel_downloads=20' >>"$dnf_conf"
   grep -q '^pkg_gpgcheck=True' "$dnf_conf" || echo 'pkg_gpgcheck=True' >>"$dnf_conf"
   grep -q '^skip_if_unavailable=True' "$dnf_conf" || echo 'skip_if_unavailable=True' >>"$dnf_conf"
   grep -q '^minrate=50k' "$dnf_conf" || echo 'minrate=50k' >>"$dnf_conf"

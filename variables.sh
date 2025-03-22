@@ -12,7 +12,7 @@ sudoers_file="/etc/sudoers.d/custom-conf"
 # borg variables
 borgbackup_timer="/etc/systemd/system/borgbackup-home.timer"
 borgbackup_service="/etc/systemd/system/borgbackup-home.service"
-borgbackup_script="$HOME/Documents/scripts/desktop/borg/home-borgbackup.sh"
+borgbackup_script="/home/$USER/Documents/scripts/desktop/borg/home-borgbackup.sh"
 move_opt_dir="/opt/borg/home-borgbackup.sh"
 
 # trash-cli variables
