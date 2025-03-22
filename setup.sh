@@ -141,10 +141,14 @@ install_system_specific_packages() {
 
 install_flatpak_packages() {
   echo "Installing Flatpak packages..."
-  for pkg in "${FLATPAK_PACKAGES[@]}"; do
-    echo "Installing $pkg via Flatpak..."
-    flatpak install -y flathub "$pkg"
-  done
+  # Setup flathub if not already setup
+  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+  # one line flatpak install
+  flatpak install -y flathub "${FLATPAK_PACKAGES[@]}" || {
+    echo "Error: Failed to install Flatpak packages." >&2
+    return 1
+  }
   echo "Flatpak packages installation completed."
 }
 
@@ -164,10 +168,12 @@ install_qtile_packages() {
     playerctl
     xev # X event viewer
   )
-  for pkg in "${qtile_packages[@]}"; do
-    echo "Installing $pkg..."
-    dnf install -y "$pkg"
-  done
+  # one line install
+  dnf install -y "${qtile_packages[@]}" || {
+    echo "Error: Failed to install Qtile packages." >&2
+    return 1
+  }
+
   echo "Qtile packages installation completed."
 }
 
@@ -309,7 +315,12 @@ laptop_hostname_change() {
 install_protonvpn() {
   echo "Installing ProtonVPN repository..."
   # Note: The URL may need to be updated to the latest version.
-  wget -O protonvpn.rpm "https://repo.protonvpn.com/fedora-$(awk '{print $3}' /etc/fedora-release)-stable/protonvpn-stable-release/protonvpn-stable-release-1.0.2-1.noarch.rpm"
+
+  # add if repo not exist
+  if [[ ! -f "/etc/yum.repos.d/protonvpn-stable.repo" ]]; then
+    wget -O protonvpn.rpm "https://repo.protonvpn.com/fedora-$(awk '{print $3}' /etc/fedora-release)-stable/protonvpn-stable-release/protonvpn-stable-release-1.0.2-1.noarch.rpm"
+  fi
+
   dnf install -y ./protonvpn.rpm && dnf check-update --refresh
   dnf install -y proton-vpn-gnome-desktop
   echo "ProtonVPN installation completed."

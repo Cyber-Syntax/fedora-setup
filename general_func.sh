@@ -53,9 +53,23 @@ enable_rpm_fusion() {
   echo "Enabling RPM Fusion repositories..."
   local fedora_version
   fedora_version=$(rpm -E %fedora)
+
+  # Check if both "rpmfusion-free" and "rpmfusion-nonfree" are already enabled.
+  local free_repo_count
+  local nonfree_repo_count
+  free_repo_count=$(dnf repolist | awk '$1=="rpmfusion-free" {print $1}' | wc -l)
+  nonfree_repo_count=$(dnf repolist | awk '$1=="rpmfusion-nonfree" {print $1}' | wc -l)
+
+  if [[ $free_repo_count -gt 0 && $nonfree_repo_count -gt 0 ]]; then
+    echo "RPM Fusion free and nonfree repositories are already enabled. Skipping installation."
+    return 0
+  fi
+
+  # Otherwise, install the repositories.
   dnf install -y \
     "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${fedora_version}.noarch.rpm" \
     "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${fedora_version}.noarch.rpm"
+
   dnf upgrade --refresh -y
   dnf group upgrade -y core
   dnf install -y rpmfusion-free-release-tainted rpmfusion-nonfree-release-tainted dnf-plugins-core

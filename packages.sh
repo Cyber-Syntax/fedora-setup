@@ -26,6 +26,7 @@ CORE_PACKAGES=(
   xournalpp
   kitty
   ruff
+  flatpak
 )
 
 DESKTOP_PACKAGES=(

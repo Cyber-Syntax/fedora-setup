@@ -14,14 +14,21 @@
 # Repositories loaded.
 install_librewolf() {
   echo "Installing Librewolf..."
-  curl -fsSL https://repo.librewolf.net/librewolf.repo | pkexec tee /etc/yum.repos.d/librewolf.repo >/dev/null
+  # Check if the repository is already added
+  if [[ ! -f "/etc/yum.repos.d/librewolf.repo" ]]; then
+    curl -fsSL https://repo.librewolf.net/librewolf.repo | pkexec tee /etc/yum.repos.d/librewolf.repo >/dev/null
+  fi
+
   dnf install -y librewolf
   echo "Librewolf installation completed."
 }
 
 install_lazygit() {
   echo "Installing Lazygit..."
-  dnf copr enable atim/lazygit -y
+  # Check if the repository is already added
+  if [[ ! -f "/etc/yum.repos.d/_copr:copr.fedorainfracloud.org:atim:lazygit.repo" ]]; then
+    dnf copr enable atim/lazygit -y
+  fi
   dnf install -y lazygit
   echo "Lazygit installation completed."
 }
