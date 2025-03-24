@@ -1,5 +1,30 @@
 #!/usr/bin/env bash
 
+install_qtile_packages() {
+  echo "Installing Qtile packages..."
+  local qtile_packages=(
+    feh
+    picom
+    i3lock
+    rofi
+    qtile-extras
+    lxappearance
+    gammastep
+    numlockx
+    dunst
+    flameshot
+    playerctl
+    xev # X event viewer
+  )
+  # one line install
+  dnf install -y "${qtile_packages[@]}" || {
+    echo "Error: Failed to install Qtile packages." >&2
+    return 1
+  }
+
+  echo "Qtile packages installation completed."
+}
+
 CORE_PACKAGES=(
   zsh-autosuggestions
   zsh-syntax-highlighting

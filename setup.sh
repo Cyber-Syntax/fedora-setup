@@ -9,12 +9,12 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Source additional functions from separate files.
-source variables.sh # make sure this sourced first to use variables in other files
-source packages.sh
-source general.sh
-source apps.sh
-source desktop.sh
-source laptop.sh
+source src/variables.sh
+source src/packages.sh
+source src/general.sh
+source src/apps.sh
+source src/desktop.sh
+source src/laptop.sh
 
 # Variable notifying the user that the script is running.
 if ! id "$USER" &>/dev/null; then
@@ -188,31 +188,6 @@ install_flatpak_packages() {
   echo "Flatpak packages installation completed."
 }
 
-install_qtile_packages() {
-  echo "Installing Qtile packages..."
-  local qtile_packages=(
-    feh
-    picom
-    i3lock
-    rofi
-    qtile-extras
-    lxappearance
-    gammastep
-    numlockx
-    dunst
-    flameshot
-    playerctl
-    xev # X event viewer
-  )
-  # one line install
-  dnf install -y "${qtile_packages[@]}" || {
-    echo "Error: Failed to install Qtile packages." >&2
-    return 1
-  }
-
-  echo "Qtile packages installation completed."
-}
-
 #TEST: Both desktop and laptop
 trash_cli_setup() {
   echo "Setting up trash-cli service..."
@@ -339,13 +314,6 @@ nopasswdlogin_group() {
   usermod -aG nopasswdlogin,autologin "$USER"
 }
 
-# Change hostname for laptop.
-laptop_hostname_change() {
-  echo "Changing hostname for laptop..."
-  hostnamectl set-hostname "$hostname_laptop"
-  echo "Hostname changed to $hostname_laptop."
-}
-
 # TEST: Install ProtonVPN repository and enable OpenVPN for SELinux.
 # This function downloads the ProtonVPN repository package and installs it.
 # Then it attempts to enable OpenVPN for SELinux by installing a local policy module.
@@ -382,9 +350,7 @@ install_protonvpn() {
   fi
 }
 
-# TEST: Run system updates.
 # This function performs cleanup and firmware update checks.
-#WARN: This is dangerous, lets exclude from all_option
 system_updates() {
   echo "Running system updates..."
   for attempt in {1..3}; do
@@ -415,7 +381,7 @@ syncthing_setup() {
 switch_lightdm() {
   echo "Switching display manager to LightDM..."
   dnf install -y lightdm
-  systemctl disable --now gdm
+  systemctl disable gdm
   systemctl enable lightdm
 
   echo "Display manager switched to LightDM."
@@ -433,7 +399,7 @@ clear_neovim() {
 # oh-my-zsh setup
 #TEST: This probably going to be cause issue because of script run as root.
 # TODO: need to find a solution for this.
-oh_my_zsh() {
+oh_my_zsh_setup() {
   echo "Installing oh-my-zsh..."
   sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
   #TODO: plugins installation: currently manual, need automation with package managers like dnf probably

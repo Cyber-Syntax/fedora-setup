@@ -19,7 +19,6 @@ speed_up_dnf() {
   echo "DNF configuration updated."
 }
 
-# Switch from firewalld to UFW.
 switch_ufw_setup() {
   echo "Switching to UFW from firewalld..."
   systemctl disable --now firewalld

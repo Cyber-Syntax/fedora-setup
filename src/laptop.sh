@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+laptop_hostname_change() {
+  echo "Changing hostname for laptop..."
+  hostnamectl set-hostname "$hostname_laptop"
+  echo "Hostname changed to $hostname_laptop."
+}
+
 tlp_setup() {
   # Capture Fedora version once
   local fedora_version
@@ -7,7 +13,7 @@ tlp_setup() {
   echo "Detected Fedora version: $fedora_version"
 
   # 1. Custom TLP configuration with safety checks
-  local config_src="./src/configs/01-mytlp.conf"
+  local config_src="./configs/01-mytlp.conf"
   local config_dest="/etc/tlp.d/01-mytlp.conf"
 
   if [[ -f "$config_src" ]]; then
@@ -84,7 +90,6 @@ tlp_setup() {
   return 0
 }
 
-#setup thinkfan
 thinkfan_setup() {
   echo "Copying thinkfan configuration..."
   # backup if there is no backup
@@ -92,7 +97,7 @@ thinkfan_setup() {
     cp /etc/thinkfan.conf /etc/thinkfan.conf.bak
   fi
 
-  cp ./src/configs/thinkfan.conf /etc/thinkfan.conf
+  cp ./configs/thinkfan.conf /etc/thinkfan.conf
 
   # Modprobe thinkpad_acpi
   echo "options thinkpad_acpi fan_control=1 experimental=1" | sudo tee /etc/modprobe.d/thinkfan.conf
@@ -126,10 +131,9 @@ EOF
   echo "Thinkfan setup completed."
 }
 
-# touchpad setup
 touchpad_setup() {
   echo "Setting up touchpad configuration..."
-  cp ./src/configs/99-touchpad.conf /etc/X11/xorg.conf.d/99-touchpad.conf
+  cp ./configs/99-touchpad.conf /etc/X11/xorg.conf.d/99-touchpad.conf
   echo "Touchpad configuration completed."
   # reload udev rules
   udevadm control --reload-rules && sudo udevadm trigger
@@ -138,11 +142,11 @@ touchpad_setup() {
 # Udev rules for brightness control on qtile
 install_qtile_udev_rule() {
   echo "Setting up udev rule for qtile..."
-  cp ./src/configs/99-qtile.rules /etc/udev/rules.d/99-qtile.rules
+  cp ./configs/99-qtile.rules /etc/udev/rules.d/99-qtile.rules
   echo "Udev rule for qtile setup completed."
 
   # copy intel_backlight to xorg.conf.d
-  cp ./src/configs/99-backlight.conf /etc/X11/xorg.conf.d/99-backlight.conf
+  cp ./configs/99-backlight.conf /etc/X11/xorg.conf.d/99-backlight.conf
   echo "Backlight configuration completed."
 
   # reaload udev rules
