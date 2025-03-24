@@ -54,12 +54,12 @@ enable_rpm_fusion() {
   local fedora_version
   fedora_version=$(rpm -E %fedora)
 
-  # Check if both "rpmfusion-free" and "rpmfusion-nonfree" are already enabled.
   local free_repo_count
   local nonfree_repo_count
   free_repo_count=$(dnf repolist | awk '$1=="rpmfusion-free" {print $1}' | wc -l)
   nonfree_repo_count=$(dnf repolist | awk '$1=="rpmfusion-nonfree" {print $1}' | wc -l)
 
+  # Check if both "rpmfusion-free" and "rpmfusion-nonfree" are already enabled.
   if [[ $free_repo_count -gt 0 && $nonfree_repo_count -gt 0 ]]; then
     echo "RPM Fusion free and nonfree repositories are already enabled. Skipping installation."
     return 0

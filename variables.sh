@@ -1,13 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # VARIABLES (general used like username, borgbackup location etc.)
 # NOTE: Change these variables as needed.
 USER="developer"
+SESSION="Qtile"
 hostname_desktop="fedora"
 hostname_laptop="fedora-laptop"
 boot_file="/etc/default/grub"
 tcp_bbr="/etc/sysctl.d/99-tcp-bbr.conf"
 sudoers_file="/etc/sudoers.d/custom-conf"
+
+# Mirror
+mirror_country="de"
 
 # borg variables
 borgbackup_timer="/etc/systemd/system/borgbackup-home.timer"

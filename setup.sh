@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Author: Serif Cyber-Syntax
 # License: BSD 3-Clause
 # Comprehensive installation and configuration script
@@ -10,10 +10,11 @@ IFS=$'\n\t'
 
 # Source additional functions from separate files.
 source variables.sh # make sure this sourced first to use variables in other files
-source general_func.sh
-source desktop_func.sh
-source general_app.sh
 source packages.sh
+source general.sh
+source apps.sh
+source desktop.sh
+source laptop.sh
 
 # Variable notifying the user that the script is running.
 if ! id "$USER" &>/dev/null; then
@@ -44,29 +45,36 @@ usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
 WARNING:
-I AM NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY THIS SCRIPT. USE AT YOUR OWN RISK.
-This script is need root privileges which can be dangerous.
-Please, always review the script before running it.
-
+I AM NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY THIS SCRIPT. USE AT YOUR OWN RISK. This script is need root privileges which can be dangerous.
 NOTE: Please change the variables as your system configuration.
 
 This scripts automates the installation and configuration on Fedora Linux.
 
 Options:
-  -a    Execute all functions. (NOTE:System detection handled by hostname)
+  -h    Display this help message.
+
+NOTE: Below options consider safe to use but still be careful.
   -b    Install Brave Browser.
   -B    Setup borgbackup service.
+  -c    Enable tap-to-click for touchpad.
+  -i    Install core packages.
+  -I    Install system-specific(desktop, laptop) packages.
   -t    Setup trash-cli service.
   -f    Setup useful linux configurations (boot timeout, tcp_bbr, terminal password timeout).
   -F    Install Flatpak packages.
   -l    Install Librewolf browser.
   -L    Install Lazygit.
   -q    Install Qtile packages.
+  -Q    Qtile udev rule for xbacklight.
   -r    Enable RPM Fusion repositories.
   -d    Speed up DNF (set max_parallel_downloads, pkg_gpgcheck, etc.).
   -x    Swap ffmpeg-free with ffmpeg.
-  -u    Run system updates (autoremove, fwupdmgr commands).
-WARNING: Below functions are need to tested with caution.
+
+Experimental: Below functions are need to tested with caution.
+  -a    Execute all functions. (NOTE:System detection handled by hostname)
+  -T    Setup TLP for laptop.
+  -P    Setup thinkfan for laptop.
+  -s    Enable Syncthing service.
   -g    Remove GNOME desktop environment (keep NetworkManager).
   -z    Setup zenpower for Ryzen 5000 series
   -n    Install NVIDIA CUDA
@@ -74,29 +82,81 @@ WARNING: Below functions are need to tested with caution.
   -v    Setup VA-API for NVIDIA RTX series
   -p    Install ProtonVPN repository and enable OpenVPN for SELinux
   -o    Install Ollama with its install.sh script
-  -h    Display this help message.
+  -u    Run system updates (autoremove, fwupdmgr commands).
+
 
 Example:
-  sudo $0 -a
+  Setup all according to machine: sudo $0 -a
+  Setup system-specific packages: sudo $0 -I
+  Setup TLP for laptop: sudo $0 -T
 EOF
   exit 1
 }
 
-# Detect system type based on hostname.
+# Detect system type based on hostname
 detect_system_type() {
-  local hostname
-  hostname=$(hostname)
-  echo "Detected hostname: $hostname"
+  local hostname detected_type
+  hostname=$(hostname 2>/dev/null || echo "unknown")
 
-  #Make sure hostnames is correct
+  # Send diagnostic messages to stderr
+  echo "Detected hostname: $hostname" >&2
+
   if [[ "$hostname" == "$hostname_desktop" ]]; then
-    echo "desktop"
+    detected_type="desktop"
   elif [[ "$hostname" == "$hostname_laptop" ]]; then
-    echo "laptop"
+    detected_type="laptop"
   else
-    echo "Error: Unknown hostname. Please check the hostname." >&2
+    echo "Error: Unknown hostname '$hostname'. Expected:" >&2
+    echo "Desktop: $hostname_desktop" >&2
+    echo "Laptop:  $hostname_laptop" >&2
     exit 1
   fi
+
+  # Output only the type to stdout
+  echo "$detected_type"
+}
+
+# Install system-specific packages
+install_system_specific_packages() {
+  local system_type=$(detect_system_type)
+  # local system_type="${1:-unknown}"
+  local pkg_list=()
+
+  case "$system_type" in
+  desktop)
+    echo "Installing desktop-specific packages..."
+    pkg_list=("${DESKTOP_PACKAGES[@]}")
+    ;;
+  laptop)
+    echo "Installing laptop-specific packages..."
+    pkg_list=("${LAPTOP_PACKAGES[@]}")
+    ;;
+  *)
+    echo "Warning: Unknown system type '$system_type'. Skipping system-specific packages." >&2
+    return 0
+    ;;
+  esac
+
+  # Check if package list is empty
+  if [[ ${#pkg_list[@]} -eq 0 ]]; then
+    echo "Warning: No packages defined for $system_type installation" >&2
+    return 0
+  fi
+
+  # Install packages with error handling
+  if ! dnf install -y "${pkg_list[@]}"; then
+    echo "Error: Failed to install some $system_type packages. Trying individual installations..." >&2
+
+    # Fallback to per-package installation
+    for pkg in "${pkg_list[@]}"; do
+      echo "Attempting to install $pkg..."
+      if ! dnf install -y "$pkg"; then
+        echo "Warning: Failed to install package $pkg" >&2
+      fi
+    done
+  fi
+
+  echo "${system_type^} packages installation completed."
 }
 
 install_core_packages() {
@@ -113,30 +173,6 @@ install_core_packages() {
   }
 
   echo "Core packages installation completed."
-}
-
-install_system_specific_packages() {
-  local system_type="$1"
-
-  if [[ "$system_type" == "desktop" ]]; then
-    echo "Installing desktop-specific packages..."
-    # one line install
-    dnf install -y "${DESKTOP_PACKAGES[@]}" || {
-      echo "Error: Failed to install desktop packages." >&2
-      return 1
-    }
-    echo "Desktop packages installation completed."
-  elif [[ "$system_type" == "laptop" ]]; then
-    echo "Installing laptop-specific packages..."
-    # one line install
-    dnf install -y "${LAPTOP_PACKAGES[@]}" || {
-      echo "Error: Failed to install laptop packages." >&2
-      return 1
-    }
-    echo "Laptop packages installation completed."
-  else
-    echo "Unknown system type. Skipping system-specific packages."
-  fi
 }
 
 install_flatpak_packages() {
@@ -241,10 +277,10 @@ setup_files() {
   fi
 
   echo "Overwriting LightDM configuration ($lightdm_custom) for $system_type..."
-  #autologin-session=qtile.desktop
   cat <<EOF >"$lightdm_custom"
 [Seat:*]
 autologin-user=$USER
+autologin-session=$SESSION
 EOF
 
   #TODO: pam setup needed on lightdm
@@ -348,6 +384,7 @@ install_protonvpn() {
 
 # TEST: Run system updates.
 # This function performs cleanup and firmware update checks.
+#WARN: This is dangerous, lets exclude from all_option
 system_updates() {
   echo "Running system updates..."
   for attempt in {1..3}; do
@@ -358,13 +395,22 @@ system_updates() {
     echo "Failed to complete autoremove after 3 attempts"
     return 1
   }
-
   fwupdmgr get-devices
   fwupdmgr refresh --force
   fwupdmgr get-updates -y
   fwupdmgr update -y
   echo "System updates completed. (TEST: Review update logs for any errors.)"
 }
+# Syncthing setup
+syncthing_setup() {
+  echo "Setting up Syncthing..."
+  #FIX: this script run root which cause this "Failed to connect to user scope bus via local transport: No medium found"
+  # need to run this without root or find a workaround
+  #NOTE: it was already running though??
+  systemctl --user enable --now syncthing
+  echo "Syncthing enabled."
+}
+
 # Switch display manager to lightdm
 switch_lightdm() {
   echo "Switching display manager to LightDM..."
@@ -394,6 +440,25 @@ oh_my_zsh() {
   git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
   git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
+}
+
+#TEST: fedora mirror country change to get good speeds
+#TODO: need little research on this to make it more efficient
+mirror_country_change() {
+  echo "Changing Fedora mirror country..."
+  # on /etc/yum.repos.d/fedora.repo and similar repos need only `&country=de` in the end on metalink
+  # metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$basearch&country=de
+  # variable mirror_country="de" handled on variable.sh
+  # also there is 3 metalink on the files generally, [fedora-source], [fedora] and [fedora-debuginfo]
+  # also need to commeent t he baseurl
+
+}
+
+#TEST: When you use same home partition when you switch distro, selinux context is not correct
+#TODO: add option
+selinux_restorecon() {
+  echo "Restoring SELinux context for home directory..."
+  restorecon -R /home/
 }
 
 # Security
@@ -427,6 +492,7 @@ main() {
   # Initialize option flags.
   all_option=false
   install_core_packages_option=false
+  install_system_specific_packages_option=false
   flatpak_option=false
   librewolf_option=false
   qtile_option=false
@@ -439,8 +505,13 @@ main() {
   ollama_option=false
   trash_cli_option=false
   borgbackup_option=false
+  syncthing_option=false
 
   # New experimental option flags.
+  qtile_udev_option=false
+  touchpad_option=false
+  thinkfan_option=false
+  tlp_option=false
   remove_gnome_option=false
   zenpower_option=false
   switch_nvidia_open_option=false
@@ -450,18 +521,22 @@ main() {
   update_system_option=false
 
   # Process command-line options.
-  while getopts "aFlLqbrdxfogznvpuotBih" opt; do
+  while getopts "abBcdFfghIilLnopPrstTuvzqQx" opt; do
     case $opt in
     a) all_option=true ;;
-    i) install_core_packages_option=true ;;
     b) brave_option=true ;;
     B) borgbackup_option=true ;;
+    c) touchpad_option=true ;;
+    i) install_core_packages_option=true ;;
+    I) install_system_specific_packages_option=true ;;
+    s) syncthing_option=true ;;
     d) dnf_speed_option=true ;;
     F) flatpak_option=true ;;
     f) config_option=true ;;
     l) librewolf_option=true ;;
     L) lazygit_option=true ;;
     q) qtile_option=true ;;
+    Q) qtile_udev_option=true ;;
     r) rpm_option=true ;;
     x) swap_ffmpeg_option=true ;;
     o) ollama_option=true ;;
@@ -470,7 +545,9 @@ main() {
     N) switch_nvidia_open_option=true ;;
     v) vaapi_option=true ;;
     p) protonvpn_option=true ;;
+    P) thinkfan_option=true ;;
     t) trash_cli_option=true ;;
+    T) tlp_option=true ;;
     u) update_system_option=true ;;
     z) zenpower_option=true ;;
     h) usage ;;
@@ -481,11 +558,17 @@ main() {
   # If no optional flags were provided, show usage and exit.
   if [[ "$all_option" == "false" ]] &&
     [[ "$install_core_packages_option" == "false" ]] &&
+    [[ "$install_system_specific_packages_option" == "false" ]] &&
     [[ "$flatpak_option" == "false" ]] &&
     [[ "$borgbackup_option" == "false" ]] &&
+    [[ "$touchpad_option" == "false" ]] &&
     [[ "$trash_cli_option" == "false" ]] &&
+    [[ "$tlp_option" == "false" ]] &&
+    [[ "$thinkfan_option" == "false" ]] &&
+    [[ "$syncthing_option" == "false" ]] &&
     [[ "$librewolf_option" == "false" ]] &&
     [[ "$qtile_option" == "false" ]] &&
+    [[ "$qtile_udev_option" == "false" ]] &&
     [[ "$brave_option" == "false" ]] &&
     [[ "$rpm_option" == "false" ]] &&
     [[ "$dnf_speed_option" == "false" ]] &&
@@ -509,7 +592,7 @@ main() {
 
   # Determine if core packages are needed.
   local need_core_packages=false
-  if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option; then
+  if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option || $syncthing_option; then
     need_core_packages=true
   fi
 
@@ -521,14 +604,18 @@ main() {
   if $all_option; then
     echo "Executing all additional functions..."
 
+    install_system_specific_packages "$system_type"
+
     # System-specific additional functions.
     #NOTE: This starts first to make sure hostname is changed first
     if [[ "$system_type" == "laptop" ]]; then
       echo "Executing laptop-specific functions..."
       laptop_hostname_change
       #TEST: Currently on laptop but can be used on globally when desktop switch lightdm
-      #TODO: write display-manager switch function
       nopasswdlogin_group
+      tlp_setup
+      thinkfan_setup
+      touchpad_setup
     elif [[ "$system_type" == "desktop" ]]; then
       echo "Executing desktop-specific functions..."
       # Desktop-specific functions could be added here.
@@ -539,35 +626,40 @@ main() {
       zenpower_setup #WARN: is it safe?
     fi
 
-    #FIXME: Unknown system type. Skipping system-specific packages.
-    install_system_specific_packages "$system_type"
     enable_rpm_fusion
     install_qtile_packages
-    trash_cli_setup
+    install_qtile_udev_rule
     ffmpeg_swap
     setup_files "$system_type"
     switch_ufw_setup
+
+    # services
+    syncthing_setup
+    trash_cli_setup
 
     # app installations
     install_librewolf
     install_brave
     install_lazygit
-    install_flatpak_packages
-
-    # Experimental functions.
     install_protonvpn
-    system_updates
+    install_flatpak_packages
 
   else
     echo "Executing selected additional functions..."
     if $lazygit_option; then install_lazygit; fi
     if $install_core_packages_option; then install_core_packages; fi
+    if $install_system_specific_packages_option; then install_system_specific_packages "$system_type"; fi
+    if $touchpad_option; then touchpad_setup; fi
     if $flatpak_option; then install_flatpak_packages; fi
     if $librewolf_option; then install_librewolf; fi
     if $qtile_option; then install_qtile_packages; fi
+    if $qtile_udev_option; then install_qtile_udev_rule; fi
     if $brave_option; then install_brave; fi
     if $rpm_option; then enable_rpm_fusion; fi
     if $trash_cli_option; then trash_cli_setup; fi
+    if $tlp_option; then tlp_setup; fi
+    if $thinkfan_option; then thinkfan_setup; fi
+    if $syncthing_option; then syncthing_setup; fi
     if $borgbackup_option; then borgbackup_setup; fi
     if $dnf_speed_option; then speed_up_dnf; fi
     if $swap_ffmpeg_option; then ffmpeg_swap; fi

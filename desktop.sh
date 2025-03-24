@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #TODO: Need to automate update to ollama?
 install_ollama() {

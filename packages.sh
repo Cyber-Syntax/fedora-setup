@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 CORE_PACKAGES=(
   zsh-autosuggestions
@@ -29,6 +29,7 @@ CORE_PACKAGES=(
   flatpak
   bat
   git
+  fzf
 )
 
 DESKTOP_PACKAGES=(
@@ -40,9 +41,11 @@ DESKTOP_PACKAGES=(
 )
 
 LAPTOP_PACKAGES=(
-  acpilight # Backlight control
-  cbatticon # battery icon
-  powertop  # Power management
+  # cbatticon # not on dnf
+  powertop # Power management
+  tlp      # Power management
+  tlp-rdw
+  thinkfan
 )
 
 FLATPAK_PACKAGES=(
