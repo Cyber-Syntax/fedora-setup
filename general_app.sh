@@ -21,6 +21,35 @@ install_librewolf() {
 
   dnf install -y librewolf
   echo "Librewolf installation completed."
+  # Copy profile from firefox to librewolf
+  cp -r "$firefox_profile" "$librewolf_dir"
+  # Change permission from root to user when copying
+  echo "Changing permissions for Librewolf profile..."
+  chown -R "$USER:$USER" "$librewolf_dir/$PROFILE"
+
+  echo "Librewolf profile copied."
+
+  cat <<EOF >"$librewolf_profile"
+[Profile1]
+Name=Default User
+IsRelative=1
+Path=$PROFILE
+
+[Install6C4726F70D182CF7]
+Default=$PROFILE
+Locked=1
+
+[Profile0]
+Name=default-default
+IsRelative=1
+Path=mqd2mhfy.default-default
+Default=1
+
+[General]
+StartWithLastProfile=1
+Version=2
+EOF
+
 }
 
 install_lazygit() {

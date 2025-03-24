@@ -27,6 +27,8 @@ CORE_PACKAGES=(
   kitty
   ruff
   flatpak
+  bat
+  git
 )
 
 DESKTOP_PACKAGES=(

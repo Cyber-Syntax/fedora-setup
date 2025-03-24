@@ -116,9 +116,9 @@ switch_nvidia_open() {
 
   #Disable nonfree nvidia driver
   dnf --disablerepo rpmfusion-nonfree-nvidia-driver
-  echo "Wait 10-20 minutes(being paronoid) for the nvidia-open modules to build than reboot. 
+  echo "Wait 10-20 minutes(being paronoid) for the nvidia-open modules to build than reboot.
   Check after reboot: modinfo nvidia | grep license
-  Correct output: Dual MIT/GPL 
+  Correct output: Dual MIT/GPL
   Also check: rpm -qa kmod-nvidia\*
   Correct output: kmod-nvidia-open-6.13.7-200.fc41.x86_64-570.124.04-1.fc41.x86_64
   "

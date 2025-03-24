@@ -18,3 +18,10 @@ move_opt_dir="/opt/borg/home-borgbackup.sh"
 # trash-cli variables
 trash_cli_service="/etc/systemd/system/trash-cli.service"
 trash_cli_timer="/etc/systemd/system/trash-cli.timer"
+
+# Browser
+#NOTE: Change these variables as your profile name otherwise it will not work.
+PROFILE="sqwu9kep.default-release"
+firefox_profile="/home/$USER/.mozilla/firefox/$PROFILE"
+librewolf_dir="/home/$USER/.librewolf/"
+librewolf_profile="/home/$USER/.librewolf/profiles.ini"

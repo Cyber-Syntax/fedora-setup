@@ -9,10 +9,10 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Source additional functions from separate files.
+source variables.sh # make sure this sourced first to use variables in other files
 source general_func.sh
 source desktop_func.sh
 source general_app.sh
-source variables.sh
 source packages.sh
 
 # Variable notifying the user that the script is running.
@@ -43,14 +43,14 @@ check_root() {
 usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
-WARNING: 
+WARNING:
 I AM NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY THIS SCRIPT. USE AT YOUR OWN RISK.
 This script is need root privileges which can be dangerous.
 Please, always review the script before running it.
 
 NOTE: Please change the variables as your system configuration.
 
-This scripts automates the installation and configuration on Fedora Linux. 
+This scripts automates the installation and configuration on Fedora Linux.
 
 Options:
   -a    Execute all functions. (NOTE:System detection handled by hostname)
@@ -290,6 +290,7 @@ EOF
 }
 
 #TEST: Group for passwordless login
+#Seems like this isn't called or work?
 nopasswdlogin_group() {
   echo "Creating group for passwordless login..."
   groupadd -r nopasswdlogin 2>/dev/null || echo "Group 'nopasswdlogin' already exists."
@@ -317,15 +318,26 @@ install_protonvpn() {
   # Note: The URL may need to be updated to the latest version.
 
   # add if repo not exist
+  #FIX: protonvpn.rpm created on the current directory problem
   if [[ ! -f "/etc/yum.repos.d/protonvpn-stable.repo" ]]; then
     wget -O protonvpn.rpm "https://repo.protonvpn.com/fedora-$(awk '{print $3}' /etc/fedora-release)-stable/protonvpn-stable-release/protonvpn-stable-release-1.0.2-1.noarch.rpm"
   fi
+  #FIX: still asking for key
+  #    ProtonVPN Fedora Stable repository                                                                                            100% |  11.1 KiB/s |   3.7 KiB |  00m00s
+  # >>> Librepo error: repomd.xml GPG signature verification error: Signing key not found
+  #  https://repo.protonvpn.com/fedora-41-stable/public_key.asc                                                                    100% |  13.3 KiB/s |   3.6 KiB |  00m00s
+  # Importing OpenPGP key 0x6:
+  #  UserID     : "Proton Technologies AG <opensource@proton.me>"
+  #  Fingerprint: <cleaned_by_me>
+  #  From       : https://repo.protonvpn.com/fedora-41-stable/public_key.asc
+  # Is this ok [y/N]:
 
   dnf install -y ./protonvpn.rpm && dnf check-update --refresh
   dnf install -y proton-vpn-gnome-desktop
   echo "ProtonVPN installation completed."
 
   echo "Enabling OpenVPN for SELinux..."
+  #FIXME: sending else in this block
   if [[ -f "myopenvpn.pp" ]]; then
     semodule -i myopenvpn.pp
     echo "SELinux OpenVPN module installed."
@@ -352,6 +364,36 @@ system_updates() {
   fwupdmgr get-updates -y
   fwupdmgr update -y
   echo "System updates completed. (TEST: Review update logs for any errors.)"
+}
+# Switch display manager to lightdm
+switch_lightdm() {
+  echo "Switching display manager to LightDM..."
+  dnf install -y lightdm
+  systemctl disable --now gdm
+  systemctl enable lightdm
+
+  echo "Display manager switched to LightDM."
+}
+
+# neovim clearing
+clear_neovim() {
+  echo "Backup neoVim configuration..."
+  mv ~/.local/share/nvim{,.bak}
+  mv ~/.local/state/nvim{,.bak}
+  mv ~/.cache/nvim{,.bak}
+}
+#TODO: ip change
+
+# oh-my-zsh setup
+#TEST: This probably going to be cause issue because of script run as root.
+# TODO: need to find a solution for this.
+oh_my_zsh() {
+  echo "Installing oh-my-zsh..."
+  sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  #TODO: plugins installation: currently manual, need automation with package managers like dnf probably
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+  git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+  git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
 }
 
 # Security
