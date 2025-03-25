@@ -3,7 +3,7 @@
 # VARIABLES (general used like username, borgbackup location etc.)
 # NOTE: Change these variables as needed.
 USER="developer"
-SESSION="Qtile"
+SESSION="qtile"
 hostname_desktop="fedora"
 hostname_laptop="fedora-laptop"
 boot_file="/etc/default/grub"

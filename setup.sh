@@ -239,8 +239,9 @@ setup_files() {
     cp "$boot_file" "$boot_file.bak"
   fi
 
-  echo "Overwriting boot configuration ($boot_file) with GRUB_TIMEOUT=0..."
-  echo "GRUB_TIMEOUT=0" >"$boot_file"
+  # Change GRUB timeout to 0 with safer method, only if not already set and keep the other lines
+  grep -qxF 'GRUB_TIMEOUT=5' "$boot_file" || echo 'GRUB_TIMEOUT=0' >>"$boot_file"
+
   echo "Regenerating GRUB configuration..."
   grub2-mkconfig -o /boot/grub2/grub.cfg
 
@@ -254,20 +255,24 @@ setup_files() {
   echo "Overwriting LightDM configuration ($lightdm_custom) for $system_type..."
   cat <<EOF >"$lightdm_custom"
 [Seat:*]
+autologin-guest=false
 autologin-user=$USER
 autologin-session=$SESSION
+autologin-user-timeout=0
+autologin-in-background=false
 EOF
 
-  #TODO: pam setup needed on lightdm
-  #WARN: This need to be appended to the file
-  #TEST:
+  #Pam setup needed on lightdm
   local pam_lightdm="/etc/pam.d/lightdm"
   # make a backup of the original file
   if [[ ! -f "$pam_lightdm.bak" ]]; then
     cp "$pam_lightdm" "$pam_lightdm.bak"
   fi
   echo "Setting up PAM configuration for LightDM..."
-  # Append the following lines to the file.
+
+  # Auto login without password for lightdm. This also need group setup
+  # Append the following lines to the file. Do not change other lines. Add the below lines to the end of the file.
+  #TODO: make group setup globally
   grep -qxF 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' "$pam_lightdm" || echo 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' >>"$pam_lightdm"
   grep -qxF 'auth        include     system-login' "$pam_lightdm" || echo 'auth        include     system-login' >>"$pam_lightdm"
 
