@@ -44,6 +44,7 @@ CORE_PACKAGES=(
   vim
   luarocks
   cargo
+  yarnpkg
   bash-language-server
   syncthing
   borgbackup
@@ -55,6 +56,7 @@ CORE_PACKAGES=(
   bat
   git
   fzf
+  pavucontrol
 )
 
 DESKTOP_PACKAGES=(

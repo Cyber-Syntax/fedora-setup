@@ -227,40 +227,144 @@ EOF
   echo "trash-cli service setup completed."
 }
 
-# Overwrites various configuration files.
-# TEST: This function configures boot (GRUB), sysctl for TCP/BBR, and sudoers.
-setup_files() {
-  local system_type="$1"
-  echo "Setting up configuration files for $system_type..."
+# This functions configures boot (GRUB), sysctl for TCP/BBR, and sudoers.
+grub_timeout() {
+  echo "Setting up boot configuration..."
 
-  # 1. Boot configuration (common for both systems)
-  #backup
+  # 1. Boot configuration - Safer GRUB_TIMEOUT modification
+  # Backup original file
   if [[ ! -f "$boot_file.bak" ]]; then
-    cp "$boot_file" "$boot_file.bak"
+    cp -p "$boot_file" "$boot_file.bak"
   fi
 
-  # Change GRUB timeout to 0 with safer method, only if not already set and keep the other lines
-  grep -qxF 'GRUB_TIMEOUT=5' "$boot_file" || echo 'GRUB_TIMEOUT=0' >>"$boot_file"
+  # Update existing GRUB_TIMEOUT or add new entry
+  if grep -q '^GRUB_TIMEOUT=' "$boot_file"; then
+    # Replace any existing timeout value
+    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' "$boot_file"
+  else
+    # Add new timeout setting after GRUB_CMDLINE_LINUX or at end of file
+    if grep -q '^GRUB_CMDLINE_LINUX=' "$boot_file"; then
+      sed -i '/^GRUB_CMDLINE_LINUX=/a GRUB_TIMEOUT=0' "$boot_file"
+    else
+      echo 'GRUB_TIMEOUT=0' >>"$boot_file"
+    fi
+  fi
+
+  # Verify the change
+  if ! grep -q '^GRUB_TIMEOUT=0' "$boot_file"; then
+    echo "Error: Failed to set GRUB_TIMEOUT" >&2
+    return 1
+  fi
+  #NOTE:
+  #Current new nvidia-open need below line on GRUB_CMDLINE_LINUX to be able to load nvidia
+  #pcie_port_pm=off
 
   echo "Regenerating GRUB configuration..."
   grub2-mkconfig -o /boot/grub2/grub.cfg
 
-  # 2. Autologin lightdm
-  local lightdm_custom="/etc/lightdm/lightdm.conf"
-  # backup
-  if [[ ! -f "$lightdm_custom.bak" ]]; then
-    cp "$lightdm_custom" "$lightdm_custom.bak"
+}
+sudoers_setup() {
+
+  # 4. Sudoers snippet (common for both systems).
+  # WARN: Is it secure to give this?
+  echo "Creating/updating sudoers snippet ($sudoers_file)..."
+  cat <<EOF >"$sudoers_file"
+## Allow borgbackup script to run without password
+developer ALL=(ALL) NOPASSWD: /opt/borg/home-borgbackup.sh
+
+## Increase timeout on terminal password prompt
+Defaults timestamp_type=global
+Defaults env_reset,timestamp_timeout=20
+EOF
+  chmod 0440 "$sudoers_file"
+}
+
+tcp_bbr_setup() {
+
+  # 3. TCP/BBR configuration - Append if missing
+  #FIXME: Couldn't write 'fq' to 'net/core/default_qdisc', ignoring: No such file or directory
+  #Couldn't write 'bbr' to 'net/ipv4/tcp_congestion_control', ignoring: No such file or directory
+  declare -A sysctl_params=(
+    ["net.core.default_qdisc"]="fq"
+    ["net.ipv4.tcp_congestion_control"]="bbr"
+    ["net.core.wmem_max"]="104857000"
+    ["net.core.rmem_max"]="104857000"
+    ["net.ipv4.tcp_rmem"]="4096 87380 104857000"
+    ["net.ipv4.tcp_wmem"]="4096 87380 104857000"
+  )
+
+  for param in "${!sysctl_params[@]}"; do
+    if ! grep -qE "^$param = " "$tcp_bbr"; then
+      echo "$param = ${sysctl_params[$param]}" >>"$tcp_bbr"
+    fi
+  done
+
+  #   # 3. Increase internet speed with TCP/BBR (common for both systems).
+  #   echo "Overwriting network settings ($tcp_bbr)..."
+  #   cat <<EOF >"$tcp_bbr"
+  # net.core.default_qdisc=fq
+  # net.ipv4.tcp_congestion_control=bbr
+  # net.core.wmem_max=104857000
+  # net.core.rmem_max=104857000
+  # net.ipv4.tcp_rmem=4096 87380 104857000
+  # net.ipv4.tcp_wmem=4096 87380 104857000
+  # EOF
+  echo "Reloading sysctl settings..."
+  sysctl --system
+
+}
+
+lightdm_autologin() {
+
+  local conf_file="/etc/lightdm/lightdm.conf"
+  local tmp_file=$(mktemp)
+
+  # Preserve existing content
+  [[ -f "$conf_file" ]] && cat "$conf_file" >"$tmp_file"
+
+  # Add/Update desired section
+  if ! grep -q '^\[Seat:\*\]' "$tmp_file"; then
+    echo -e "\n[Seat:*]" >>"$tmp_file"
   fi
 
-  echo "Overwriting LightDM configuration ($lightdm_custom) for $system_type..."
-  cat <<EOF >"$lightdm_custom"
-[Seat:*]
+  # Update settings within the section
+  sed -i '/^\[Seat:\*\]/,/^\[/ {
+        /^autologin-user=/d
+        /^autologin-session=/d
+        /^autologin-guest=/d
+        /^autologin-user-timeout=/d
+        /^autologin-in-background=/d
+    }' "$tmp_file"
+
+  cat <<EOF >>"$tmp_file"
 autologin-guest=false
 autologin-user=$USER
 autologin-session=$SESSION
 autologin-user-timeout=0
 autologin-in-background=false
 EOF
+
+  # Install new config
+  install -m 644 -o root -g root "$tmp_file" "$conf_file"
+  rm "$tmp_file"
+
+  #   # 2. Autologin lightdm
+  #   local lightdm_custom="/etc/lightdm/lightdm.conf"
+  #   # backup
+  #   if [[ ! -f "$lightdm_custom.bak" ]]; then
+  #     cp "$lightdm_custom" "$lightdm_custom.bak"
+  #   fi
+  #
+  #   echo "Overwriting LightDM configuration ($lightdm_custom) for $system_type..."
+  #   cat <<EOF >"$lightdm_custom"
+  # [Seat:*]
+  # autologin-guest=false
+  # autologin-user=$USER
+  # autologin-session=$SESSION
+  # autologin-user-timeout=0
+  # autologin-in-background=false
+  # EOF
+  #
 
   #Pam setup needed on lightdm
   local pam_lightdm="/etc/pam.d/lightdm"
@@ -276,33 +380,14 @@ EOF
   grep -qxF 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' "$pam_lightdm" || echo 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' >>"$pam_lightdm"
   grep -qxF 'auth        include     system-login' "$pam_lightdm" || echo 'auth        include     system-login' >>"$pam_lightdm"
 
-  # 3. Increase internet speed with TCP/BBR (common for both systems).
-  echo "Overwriting network settings ($tcp_bbr)..."
-  cat <<EOF >"$tcp_bbr"
-net.core.default_qdisc=fq
-net.ipv4.tcp_congestion_control=bbr
-net.core.wmem_max=104857000
-net.core.rmem_max=104857000
-net.ipv4.tcp_rmem=4096 87380 104857000
-net.ipv4.tcp_wmem=4096 87380 104857000
-EOF
-  echo "Reloading sysctl settings..."
-  sysctl --system
+}
 
-  # 4. Sudoers snippet (common for both systems).
-  # WARN: Is it secure to give this?
-  echo "Creating/updating sudoers snippet ($sudoers_file)..."
-  cat <<EOF >"$sudoers_file"
-## Allow borgbackup script to run without password
-developer ALL=(ALL) NOPASSWD: /opt/borg/home-borgbackup.sh
-
-## Increase timeout on terminal password prompt
-Defaults timestamp_type=global
-Defaults env_reset,timestamp_timeout=20
-EOF
-  chmod 0440 "$sudoers_file"
-
-  echo "Configuration files have been updated for $system_type."
+setup_files() {
+  #TODO: need to setup those function in options, temp for now
+  grub_timeout
+  lightdm_autologin
+  tcp_bbr_setup
+  sudoers_setup
 }
 
 #TEST: Group for passwordless login
@@ -311,7 +396,6 @@ nopasswdlogin_group() {
   echo "Creating group for passwordless login..."
   groupadd -r nopasswdlogin 2>/dev/null || echo "Group 'nopasswdlogin' already exists."
   groupadd -r autologin 2>/dev/null || echo "Group 'autologin' already exists."
-  # CHANGED: Replaced literal "username" with the USER variable for consistency.
   gpasswd -a "$USER" nopasswdlogin
   gpasswd -a "$USER" autologin
   echo "Group created for passwordless login."
@@ -411,6 +495,7 @@ oh_my_zsh_setup() {
   git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
   git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
+  # How to solve root issue?
 }
 
 #TEST: fedora mirror country change to get good speeds
@@ -431,6 +516,31 @@ selinux_restorecon() {
   echo "Restoring SELinux context for home directory..."
   restorecon -R /home/
 }
+
+# sshd setup, copy ssh keys to laptop from desktop etc.
+ssh_setup_laptop() {
+  echo "Setting up SSH for laptop"
+
+  # Enable password authentication to be able to receive keys
+  systemctl enable --now sshd
+  # Write sshd config to allow password authentication
+  #TODO: Add some security here
+  cat <<EOF >/etc/ssh/sshd_config.d/temp_password_auth.conf
+PasswordAuthentication yes
+PermitRootLogin no
+PermitEmptyPasswords yes
+EOF
+  echo "SSH password authentication enabled for laptop."
+}
+ssh_setup_desktop() {
+  echo "Setting up SSH..."
+
+  # TODO: need to create keys but if they are not created yet.
+  # NOTE: desktop sends keys to laptop here
+  ssh-copy-id $USER@$LAPTOP_IP
+}
+
+# TODO: mpv setup
 
 # Security
 ##Randomize MAC address and  This could be used to track general network activity.
