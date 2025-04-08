@@ -4,6 +4,7 @@
 # NOTE: Change these variables as needed.
 USER="developer"
 SESSION="qtile"
+LAPTOP_IP="192.168.1.54"
 hostname_desktop="fedora"
 hostname_laptop="fedora-laptop"
 boot_file="/etc/default/grub"

@@ -131,12 +131,11 @@ EOF
   echo "Thinkfan setup completed."
 }
 
-touchpad_setup() {
-  echo "Setting up touchpad configuration..."
+xorg_setup_intel() {
+  echo "Setting up xorg configuration..."
   cp ./configs/99-touchpad.conf /etc/X11/xorg.conf.d/99-touchpad.conf
-  echo "Touchpad configuration completed."
-  # reload udev rules
-  udevadm control --reload-rules && sudo udevadm trigger
+  cp ./configs/20-intel.conf /etc/X11/xorg.conf.d/20-intel.conf
+  echo "Xorg configuration completed."
 }
 
 # Udev rules for brightness control on qtile
