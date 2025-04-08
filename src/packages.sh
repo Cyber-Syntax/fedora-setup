@@ -42,10 +42,6 @@ CORE_PACKAGES=(
   keepassxc
   neovim
   vim
-  luarocks
-  cargo
-  yarnpkg
-  bash-language-server
   syncthing
   borgbackup
   seahorse
@@ -55,15 +51,23 @@ CORE_PACKAGES=(
   flatpak
   bat
   git
+  gh
   fzf
   pavucontrol
+  luarocks
+  cargo
+  yarnpkg
+  bash-language-server
+  python3-devel
+  dbus-devel
 )
 
 DESKTOP_PACKAGES=(
   virt-manager # Virtualization manager
   libvirt      # Virtualization toolkit
   nvidia-open
-  gdm # Display manager; adjust if switching
+  # gdm # Display manager; adjust if switching
+  lightdm
   sysbench
 )
 

@@ -6,13 +6,18 @@ speed_up_dnf() {
   local dnf_conf="/etc/dnf/dnf.conf"
   # Backup current dnf.conf if no backup exists.
   if [[ ! -f "${dnf_conf}.bak" ]]; then
-    cp "$dnf_conf" "${dnf_conf}.bak"
+    #TESTING: error handling
+    cp "$dnf_conf" "${dnf_conf}.bak" || {
+      echo "Error: Failed to create backup of $dnf_conf" >&2
+      return 1
+    }
   fi
   # Append settings if not already present.
+  # 250K = 0.25MB/s
   grep -q '^max_parallel_downloads=20' "$dnf_conf" || echo 'max_parallel_downloads=20' >>"$dnf_conf"
   grep -q '^pkg_gpgcheck=True' "$dnf_conf" || echo 'pkg_gpgcheck=True' >>"$dnf_conf"
   grep -q '^skip_if_unavailable=True' "$dnf_conf" || echo 'skip_if_unavailable=True' >>"$dnf_conf"
-  grep -q '^minrate=50k' "$dnf_conf" || echo 'minrate=50k' >>"$dnf_conf"
+  grep -q '^minrate=250k' "$dnf_conf" || echo 'minrate=250k' >>"$dnf_conf"
   grep -q '^timeout=15' "$dnf_conf" || echo 'timeout=15' >>"$dnf_conf"
   grep -q '^retries=5' "$dnf_conf" || echo 'retries=5' >>"$dnf_conf"
 

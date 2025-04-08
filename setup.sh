@@ -673,13 +673,24 @@ main() {
 
   # Determine if core packages are needed.
   local need_core_packages=false
-  if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option || $syncthing_option; then
+  #TESTING: new options lazygit,ufw and add more if needed
+  if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option || $syncthing_option || $ufw_option || $lazygit_option; then
     need_core_packages=true
   fi
 
   # Install core packages.
   if $need_core_packages; then
     install_core_packages
+  fi
+
+  #TESTING:
+  # If laptop or desktop option is selected, install system-specific packages.
+  if $tlp_option || $thinkfan_option || $install_system_specific_packages_option; then
+    install_system_specific_packages "$system_type"
+  fi
+
+  if $nvidia_cuda_option || $switch_nvidia_open_option || $vaapi_option || $borgbackup_option; then
+    install_system_specific_packages "$system_type"
   fi
 
   if $all_option; then
@@ -704,7 +715,7 @@ main() {
       nvidia_cuda_setup
       vaapi_setup
       borgbackup_setup
-      zenpower_setup #WARN: is it safe?
+      # zenpower_setup #WARN: is it safe?
     fi
 
     enable_rpm_fusion
