@@ -15,6 +15,10 @@ firefox_profile="/home/$USER/.mozilla/firefox/$PROFILE"
 librewolf_dir="/home/$USER/.librewolf/"
 librewolf_profile="/home/$USER/.librewolf/profiles.ini"
 
+# Libvirtd
+libvirt_file="./configs/libvirt/network.conf"
+dir_libvirt="/etc/libvirt/network.conf"
+
 # DNF repository directory
 REPO_DIR="/etc/yum.repos.d"
 

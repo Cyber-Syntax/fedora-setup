@@ -4,7 +4,7 @@
 # Comprehensive installation and configuration script
 #for sudo dnf-based systems.
 
-# Bash settings for strict error checking.
+# Prevents the script from continuing on errors, unset variables, and pipe failures.
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -539,6 +539,42 @@ install_vscode() {
   
   log_info "VS Code installed successfully."
 }
+
+#TODO: Setup virtualization
+# add options etc.
+#TESTING:
+virt_manager_setup() {
+  log_info "Setting up virtualization..."
+  
+  # Install required packages
+  sudo dnf install @virtualization
+  sudo dnf group install --with-optional virtualization
+
+  # Create the libvirt group if it doesn't exist
+  if ! getent group libvirt >/dev/null; then
+    sudo groupadd -r libvirt
+  fi
+
+  # Add group to user
+  sudo usermod -aG libvirt "$USER"
+  
+  # Enable and start libvirt service
+  sudo systemctl enable --now libvirtd
+  if [ $? -ne 0 ]; then
+    log_error "Failed to enable and start libvirt service"
+    return 1
+  fi
+
+  # Fix network nat issue, switch iptables
+  sudo cp "$libvirt_file" "$dir_libvirt"
+
+  # enable network ufw 
+  sudo ufw allow in on virbr0
+  sudo ufw allow out on virbr0
+  
+  log_info "Virtualization setup completed."
+}
+
 
 # --- Main function ---
 
