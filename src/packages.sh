@@ -28,6 +28,8 @@ install_qtile_packages() {
 }
 
 CORE_PACKAGES=(
+  curl
+  wget
   zsh-autosuggestions
   zsh-syntax-highlighting
   zsh

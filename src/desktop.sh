@@ -14,7 +14,11 @@ install_ollama() {
   fi
 
   log_debug "Downloading and running Ollama install script..."
-  if log_cmd "curl -fsSL https://ollama.com/install.sh | sed s/--add-repo/addrepo/ | sh"; then
+  # Execute curl command directly instead of passing it to log_cmd with pipes
+  curl -fsSL https://ollama.com/install.sh | sed 's/--add-repo/addrepo/' | sh
+  local _result=$?
+  
+  if [ $_result -eq 0 ]; then
     # Verify installation
     if command -v ollama &>/dev/null; then
       log_info "Ollama installation completed successfully"
@@ -73,15 +77,20 @@ WantedBy=timers.target
 EOF
 
   log_info "Reloading systemd..."
-  log_cmd "systemctl daemon-reload"
+  systemctl daemon-reload
+  if [ $? -ne 0 ]; then
+    log_error "Failed to reload systemd"
+    return 1
+  fi
+  
   log_info "Enabling and starting borgbackup service..."
-  if log_cmd "systemctl enable --now borgbackup-home.timer"; then
+  systemctl enable --now borgbackup-home.timer
+  if [ $? -eq 0 ]; then
     log_info "borgbackup service setup completed."
   else
     log_error "Failed to enable borgbackup service"
     return 1
   fi
-
 }
 
 # Autologin for gdm
@@ -137,20 +146,23 @@ zenpower_setup() {
   fi
 
   log_debug "Enabling zenpower3 COPR repository..."
-  if ! dnf copr enable shdwchn10/zenpower3 -y; then
+  dnf copr enable shdwchn10/zenpower3 -y
+  if [ $? -ne 0 ]; then
     log_error "Failed to enable zenpower3 COPR repository"
     return 1
   fi
 
   log_debug "Installing zenpower3 and zenmonitor3..."
-  if ! dnf install -y zenpower3 zenmonitor3; then
+  dnf install -y zenpower3 zenmonitor3
+  if [ $? -ne 0 ]; then
     log_error "Failed to install zenpower packages"
     return 1
   fi
 
   local blacklist_file="/etc/modprobe.d/zenpower.conf"
   log_debug "Creating k10temp blacklist file at $blacklist_file..."
-  if ! echo "blacklist k10temp" >"$blacklist_file"; then
+  echo "blacklist k10temp" >"$blacklist_file"
+  if [ $? -ne 0 ]; then
     log_error "Failed to create k10temp blacklist file"
     return 1
   fi
@@ -176,31 +188,36 @@ nvidia_cuda_setup() {
   cuda_repo="https://developer.download.nvidia.com/compute/cuda/repos/fedora41/${arch}/cuda-fedora41.repo"
 
   log_debug "Adding CUDA repository..."
-  if ! dnf config-manager addrepo --from-repofile="$cuda_repo"; then
+  dnf config-manager addrepo --from-repofile="$cuda_repo"
+  if [ $? -ne 0 ]; then
     log_error "Failed to add CUDA repository"
     return 1
   fi
 
   log_debug "Cleaning DNF cache..."
-  if ! dnf clean all; then
+  dnf clean all
+  if [ $? -ne 0 ]; then
     log_error "Failed to clean DNF cache"
     return 1
   fi
 
   log_debug "Disabling nvidia-driver module..."
-  if ! dnf module disable -y nvidia-driver; then
+  dnf module disable -y nvidia-driver
+  if [ $? -ne 0 ]; then
     log_warn "Failed to disable nvidia-driver module - this might be normal on Fedora 41"
   fi
 
   log_debug "Setting package exclusions..."
   local exclude_pkgs="nvidia-driver,nvidia-modprobe,nvidia-persistenced,nvidia-settings,nvidia-libXNVCtrl,nvidia-xconfig"
-  if ! dnf config-manager setopt "cuda-fedora41-${arch}.exclude=${exclude_pkgs}"; then
+  dnf config-manager setopt "cuda-fedora41-${arch}.exclude=${exclude_pkgs}"
+  if [ $? -ne 0 ]; then
     log_error "Failed to set package exclusions"
     return 1
   fi
 
   log_debug "Installing CUDA toolkit..."
-  if ! dnf -y install cuda-toolkit; then
+  dnf -y install cuda-toolkit
+  if [ $? -ne 0 ]; then
     log_error "Failed to install CUDA toolkit"
     return 1
   fi
@@ -234,7 +251,8 @@ switch_nvidia_open() {
 
   local nvidia_kmod_macro="/etc/rpm/macros.nvidia-kmod"
   log_debug "Creating NVIDIA kmod macro file..."
-  if ! echo "%_with_kmod_nvidia_open 1" >"$nvidia_kmod_macro"; then
+  echo "%_with_kmod_nvidia_open 1" >"$nvidia_kmod_macro"
+  if [ $? -ne 0 ]; then
     log_error "Failed to create NVIDIA kmod macro file"
     return 1
   fi
@@ -242,16 +260,19 @@ switch_nvidia_open() {
   local current_kernel
   current_kernel=$(uname -r)
   log_debug "Rebuilding NVIDIA modules for kernel $current_kernel..."
-  if ! akmods --kernels "$current_kernel" --rebuild; then
+  akmods --kernels "$current_kernel" --rebuild
+  if [ $? -ne 0 ]; then
     log_warn "Initial rebuild failed, attempting with --force..."
-    if ! akmods --kernels "$current_kernel" --rebuild --force; then
+    akmods --kernels "$current_kernel" --rebuild --force
+    if [ $? -ne 0 ]; then
       log_error "Failed to rebuild NVIDIA modules"
       return 1
     fi
   fi
 
   log_debug "Disabling RPMFusion non-free NVIDIA driver repository..."
-  if ! dnf --disablerepo rpmfusion-nonfree-nvidia-driver; then
+  dnf --disablerepo rpmfusion-nonfree-nvidia-driver
+  if [ $? -ne 0 ]; then
     log_error "Failed to disable RPMFusion non-free NVIDIA driver repository"
     return 1
   fi
@@ -286,7 +307,8 @@ vaapi_setup() {
     "gstreamer1-plugins-bad-free-devel"
   )
 
-  if ! dnf install -y "${packages[@]}"; then
+  dnf install -y "${packages[@]}"
+  if [ $? -ne 0 ]; then
     log_error "Failed to install VA-API packages"
     return 1
   fi
@@ -310,7 +332,8 @@ vaapi_setup() {
   done
 
   if [[ "$need_append" == "true" ]]; then
-    if ! printf '%s\n' "${env_vars[@]}" >>"$env_file"; then
+    printf '%s\n' "${env_vars[@]}" >>"$env_file"
+    if [ $? -ne 0 ]; then
       log_error "Failed to update environment variables in $env_file"
       return 1
     fi
@@ -361,7 +384,8 @@ remove_gnome() {
   fi
 
   log_debug "Removing GNOME packages..."
-  if ! dnf remove -y "${gnome_packages[@]}"; then
+  dnf remove -y "${gnome_packages[@]}"
+  if [ $? -ne 0 ]; then
     log_error "Failed to remove GNOME packages"
     return 1
   fi

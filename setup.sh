@@ -456,9 +456,24 @@ syncthing_setup() {
 # Switch display manager to lightdm
 switch_lightdm() {
   log_info "Switching display manager to LightDM..."
-  log_cmd "dnf install -y lightdm"
-  log_cmd "systemctl disable gdm"
-  log_cmd "systemctl enable lightdm"
+  
+  # Execute commands directly instead of using log_cmd
+  dnf install -y lightdm
+  if [ $? -ne 0 ]; then
+    log_error "Failed to install LightDM"
+    return 1
+  fi
+  
+  systemctl disable gdm
+  if [ $? -ne 0 ]; then
+    log_warn "Failed to disable GDM, it might not be installed"
+  fi
+  
+  systemctl enable lightdm
+  if [ $? -ne 0 ]; then
+    log_error "Failed to enable LightDM"
+    return 1
+  fi
 
   log_info "Display manager switched to LightDM."
 }
@@ -466,22 +481,42 @@ switch_lightdm() {
 # neovim clearing
 clear_neovim() {
   log_info "Backup neoVim configuration..."
-  log_cmd "mv ~/.local/share/nvim{,.bak}" || log_warn "Failed to backup nvim share directory"
-  log_cmd "mv ~/.local/state/nvim{,.bak}" || log_warn "Failed to backup nvim state directory"
-  log_cmd "mv ~/.cache/nvim{,.bak}" || log_warn "Failed to backup nvim cache directory"
+  
+  # Execute commands directly instead of using log_cmd
+  mv ~/.local/share/nvim{,.bak} 2>/dev/null || log_warn "Failed to backup nvim share directory"
+  mv ~/.local/state/nvim{,.bak} 2>/dev/null || log_warn "Failed to backup nvim state directory"
+  mv ~/.cache/nvim{,.bak} 2>/dev/null || log_warn "Failed to backup nvim cache directory"
 }
-#TODO: ip change
 
 # oh-my-zsh setup
 #TEST: This probably going to be cause issue because of script run as root.
 # TODO: need to find a solution for this.
 ohmyzsh_setup() {
   log_info "Installing oh-my-zsh..."
-  log_cmd "sh -c '$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)'"
+  
+  # Execute commands directly instead of using log_cmd
+  sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  if [ $? -ne 0 ]; then
+    log_error "Failed to install Oh My Zsh"
+    return 1
+  fi
+  
   #TODO: plugins installation: currently manual, need automation with package managers like dnf probably
-  log_cmd "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-  log_cmd "git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
-  log_cmd "git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k"
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+  if [ $? -ne 0 ]; then
+    log_warn "Failed to clone zsh-syntax-highlighting"
+  fi
+  
+  git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+  if [ $? -ne 0 ]; then
+    log_warn "Failed to clone zsh-autosuggestions"
+  fi
+  
+  git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
+  if [ $? -ne 0 ]; then
+    log_warn "Failed to clone powerlevel10k theme"
+  fi
+  
   # How to solve root issue?
 }
 
@@ -500,7 +535,15 @@ mirror_country_change() {
 #TODO: add option
 selinux_context() {
   log_info "Restoring SELinux context for home directory..."
-  log_cmd "restorecon -R /home/"
+  
+  # Execute command directly instead of using log_cmd
+  restorecon -R /home/
+  if [ $? -ne 0 ]; then
+    log_error "Failed to restore SELinux context for /home/"
+    return 1
+  fi
+  
+  log_info "SELinux context restored successfully."
 }
 
 # sshd setup, copy ssh keys to laptop from desktop etc.
@@ -508,7 +551,12 @@ ssh_setup_laptop() {
   log_info "Setting up SSH for laptop"
 
   # Enable password authentication to be able to receive keys
-  log_cmd "systemctl enable --now sshd"
+  systemctl enable --now sshd
+  if [ $? -ne 0 ]; then
+    log_error "Failed to enable SSH service"
+    return 1
+  fi
+  
   # Write sshd config to allow password authentication
   #TODO: Add some security here
   cat <<EOF >/etc/ssh/sshd_config.d/temp_password_auth.conf
@@ -521,7 +569,13 @@ EOF
 
   # TODO: need to create keys but if they are not created yet.
   # NOTE: desktop sends keys to laptop here
-  log_cmd "ssh-copy-id $USER@$LAPTOP_IP"
+  ssh-copy-id $USER@$LAPTOP_IP
+  if [ $? -ne 0 ]; then
+    log_error "Failed to copy SSH keys to laptop"
+    return 1
+  fi
+  
+  log_info "SSH keys copied successfully."
 }
 
 # Install vscode
@@ -529,27 +583,26 @@ install_vscode() {
   log_info "Installing Visual Studio Code..."
   #FIX: need proper way handle
   sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+  if [ $? -ne 0 ]; then
+    log_error "Failed to import Microsoft key"
+    return 1
+  fi
+  
   echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null
+  if [ $? -ne 0 ]; then
+    log_error "Failed to create VS Code repository file"
+    return 1
+  fi
 
   dnf check-update
-  sudo dnf install code # or code-insiders
+  sudo dnf install -y code
+  if [ $? -ne 0 ]; then
+    log_error "Failed to install VS Code"
+    return 1
+  fi
+  
+  log_info "VS Code installed successfully."
 }
-
-# TODO: mpv setup
-
-# Security
-##Randomize MAC address and  This could be used to track general network activity.
-#TODO: keep static hostname
-#sudo bash -c 'cat > /etc/NetworkManager/conf.d/00-macrandomize.conf' <<-'EOF'
-#[device]
-#wifi.scan-rand-mac-address=yes
-#
-#[connection]
-#wifi.cloned-mac-address=random
-#ethernet.cloned-mac-address=random
-#EOF
-#
-#sudo systemctl restart NetworkManager
 
 # --- Main function ---
 

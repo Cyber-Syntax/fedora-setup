@@ -39,15 +39,18 @@ speed_up_dnf() {
 switch_ufw_setup() {
   log_info "Switching to UFW from firewalld..."
 
-  log_cmd "systemctl disable --now firewalld" || {
+  # Execute commands directly instead of using log_cmd
+  systemctl disable --now firewalld
+  if [ $? -ne 0 ]; then
     log_error "Failed to disable firewalld"
     return 1
-  }
+  fi
 
-  log_cmd "systemctl enable --now ufw" || {
+  systemctl enable --now ufw
+  if [ $? -ne 0 ]; then
     log_error "Failed to enable UFW"
     return 1
-  }
+  fi
 
   log_info "UFW installation completed."
   log_info "Updating UFW rules..."
@@ -60,15 +63,24 @@ switch_ufw_setup() {
   )
 
   for cmd in "${ufw_commands[@]}"; do
-    log_cmd "$cmd" || {
+    eval "$cmd"
+    if [ $? -ne 0 ]; then
       log_error "Failed to set UFW rule: $cmd"
       return 1
-    }
+    fi
   done
 
   log_info "Opening ports for Syncthing..."
-  log_cmd "ufw allow 22000" || log_warn "Failed to open Syncthing TCP port"
-  log_cmd "ufw allow 21027/udp" || log_warn "Failed to open Syncthing discovery port"
+  
+  ufw allow 22000
+  if [ $? -ne 0 ]; then
+    log_warn "Failed to open Syncthing TCP port"
+  fi
+  
+  ufw allow 21027/udp
+  if [ $? -ne 0 ]; then
+    log_warn "Failed to open Syncthing discovery port"
+  fi
 
   log_info "Syncthing ports opened. Check UFW status with 'ufw status verbose'"
 }
@@ -78,7 +90,10 @@ ffmpeg_swap() {
   log_info "Checking for ffmpeg-free package..."
   if dnf list installed ffmpeg-free &>/dev/null; then
     log_info "Swapping ffmpeg-free with ffmpeg..."
-    if log_cmd "dnf swap ffmpeg-free ffmpeg --allowerasing -y"; then
+    
+    # Execute command directly instead of using log_cmd
+    dnf swap ffmpeg-free ffmpeg --allowerasing -y
+    if [ $? -eq 0 ]; then
       log_info "ffmpeg swap completed successfully."
     else
       log_error "Failed to swap ffmpeg packages"
@@ -110,19 +125,34 @@ enable_rpm_fusion() {
 
   # Otherwise, install the repositories.
   log_info "Installing RPM Fusion repositories..."
-  if ! log_cmd "dnf install -y \
+  
+  # Execute command directly instead of using log_cmd
+  dnf install -y \
     https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${fedora_version}.noarch.rpm \
-    https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${fedora_version}.noarch.rpm"; then
+    https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${fedora_version}.noarch.rpm
+  if [ $? -ne 0 ]; then
     log_error "Failed to install RPM Fusion repositories"
     return 1
   fi
 
   log_info "Upgrading system packages..."
-  log_cmd "dnf upgrade --refresh -y" || log_warn "System upgrade failed"
-  log_cmd "dnf group upgrade -y core" || log_warn "Core group upgrade failed"
+  
+  # Execute commands directly instead of using log_cmd
+  dnf upgrade --refresh -y
+  if [ $? -ne 0 ]; then
+    log_warn "System upgrade failed"
+  fi
+  
+  dnf group upgrade -y core
+  if [ $? -ne 0 ]; then
+    log_warn "Core group upgrade failed"
+  fi
 
   log_info "Installing additional RPM Fusion components..."
-  if ! log_cmd "dnf install -y rpmfusion-free-release-tainted rpmfusion-nonfree-release-tainted dnf-plugins-core"; then
+  
+  # Execute command directly instead of using log_cmd
+  dnf install -y rpmfusion-free-release-tainted rpmfusion-nonfree-release-tainted dnf-plugins-core
+  if [ $? -ne 0 ]; then
     log_error "Failed to install RPM Fusion tainted repositories"
     return 1
   fi

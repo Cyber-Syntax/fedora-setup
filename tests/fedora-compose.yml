@@ -1,0 +1,17 @@
+version: "3"
+services:
+  fedora:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: podman-fedora
+    hostname: podman-fedora
+    user: podman-fedora
+    restart: unless-stopped
+    volumes:
+      - ./data:/home/podman-fedora/data
+    environment:
+      - USERNAME=podman-fedora
+volumes:
+  data:
+    driver: local
