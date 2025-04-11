@@ -1,3 +1,6 @@
+# logs
+logs/*
+
 tests/tmp/
 # Temporary test files
 temp.*
