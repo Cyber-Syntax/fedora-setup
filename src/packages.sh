@@ -20,7 +20,7 @@ install_qtile_packages() {
     xev # X event viewer
   )
   # one line install
-  dnf install -y "${qtile_packages[@]}" || {
+  sudo dnf install -y "${qtile_packages[@]}" || {
     log_error "Failed to install Qtile packages."
     return 1
   }
@@ -76,7 +76,7 @@ DESKTOP_PACKAGES=(
 )
 
 LAPTOP_PACKAGES=(
-  # cbatticon # not on dnf
+  # cbatticon # not on sudo dnf
   powertop # Power management
   tlp      # Power management
   tlp-rdw

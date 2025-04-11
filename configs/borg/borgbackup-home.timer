@@ -1,0 +1,11 @@
+[Unit]
+Description=Timer for Home Backup using BorgBackup
+
+[Timer]
+# Schedules the backup at 10:00 every day.
+OnCalendar=*-*-* 10:00:00
+Persistent=true
+# Note: systemd timers work with local time. To follow Europe/Istanbul time, ensure your system’s timezone is set accordingly.
+
+[Install]
+WantedBy=timers.target

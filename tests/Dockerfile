@@ -1,8 +1,8 @@
 FROM docker.io/library/fedora:latest
 
 # Install basic packages including sudo
-RUN dnf -y update && \
-    dnf -y install \
+RUN sudo dnf -y update && \
+    sudo dnf -y install \
     git \
     vim \
     curl \
@@ -11,7 +11,7 @@ RUN dnf -y update && \
     findutils \
     procps-ng \
     sudo \
-    && dnf clean all
+    && sudo dnf clean all
 
 # Create user with sudo privileges
 RUN useradd -m -G wheel podman-fedora && \

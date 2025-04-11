@@ -70,11 +70,11 @@ setup() {
   }
   export -f rpm
   
-  function dnf() {
-    echo "Mock dnf: $*" >> "$BATS_TEST_TMPDIR/dnf.log"
+  function sudo dnf() {
+    echo "Mock sudo dnf: $*" >> "$BATS_TEST_TMPDIR/sudo dnf.log"
     return 0
   }
-  export -f dnf
+  export -f sudo dnf
   
   function modprobe() {
     echo "Mock modprobe: $*" >> "$BATS_TEST_TMPDIR/modprobe.log"
@@ -254,7 +254,7 @@ teardown() {
   grep -q "systemctl: disable --now tuned-ppd" "$BATS_TEST_TMPDIR/systemctl.log"
   
   # Verify DNF remove was called
-  grep -q "dnf: remove -y tuned tuned-ppd" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "sudo dnf: remove -y tuned tuned-ppd" "$BATS_TEST_TMPDIR/sudo dnf.log"
   
   # Verify TLP services were enabled
   grep -q "systemctl: enable --now tlp" "$BATS_TEST_TMPDIR/systemctl.log"

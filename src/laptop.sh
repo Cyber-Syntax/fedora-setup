@@ -22,20 +22,12 @@ tlp_setup() {
   fedora_version=$(awk '{print $3}' /etc/fedora-release)
   echo "Detected Fedora version: $fedora_version"
 
-  # 1. Custom TLP configuration with safety checks
-  local config_src="./configs/01-mytlp.conf"
-  local config_dest="/etc/tlp.d/01-mytlp.conf"
-
-  if [[ -f "$config_src" ]]; then
-    echo "Copying custom TLP configuration..."
-    install -o root -g root -m 644 "$config_src" "$config_dest" || {
-      echo "Error: Failed to copy TLP configuration" >&2
-      return 1
-    }
-    echo "TLP configuration copied successfully."
-  else
-    echo "Warning: Custom TLP configuration not found at $config_src" >&2
+  sudo cp "$tlp_file" "$dir_tlp"
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to copy TLP configuration file" >&2
+    return 1
   fi
+
 
   # 2. Service management with existence checks
   handle_services() {
@@ -56,7 +48,7 @@ tlp_setup() {
     handle_services 'disable --now' tuned tuned-ppd
 
     if rpm -q tuned tuned-ppd &>/dev/null; then
-      dnf remove -y tuned tuned-ppd || {
+      sudo dnf remove -y tuned tuned-ppd || {
         echo "Error: Failed to remove TuneD packages" >&2
         return 1
       }
@@ -69,7 +61,7 @@ tlp_setup() {
     handle_services 'disable --now' power-profile-daemon
 
     if rpm -q power-profile-daemon &>/dev/null; then
-      dnf remove -y power-profile-daemon || {
+      sudo dnf remove -y power-profile-daemon || {
         echo "Error: Failed to remove power-profile-daemon" >&2
         return 1
       }
@@ -80,7 +72,7 @@ tlp_setup() {
   echo "Configuring TLP services..."
   for service in tlp tlp-sleep; do
     if [[ -f "/usr/lib/systemd/system/${service}.service" ]]; then
-      systemctl enable --now "$service" || {
+      sudo systemctl enable --now "$service" || {
         echo "Error: Failed to enable $service" >&2
         return 1
       }
@@ -90,11 +82,11 @@ tlp_setup() {
   done
 
   # mask rfkill to be able to handle radios with tlp
-  systemctl mask systemd-rfkill.service
-  systemctl mask systemd-rfkill.socket
+  sudo systemctl mask systemd-rfkill.service
+  sudo systemctl mask systemd-rfkill.socket
 
   # enable tlp radio device handling
-  tlp-rdw enable
+  sudo tlp-rdw enable
 
   echo "TLP setup completed successfully."
   return 0
@@ -104,10 +96,14 @@ thinkfan_setup() {
   echo "Copying thinkfan configuration..."
   # backup if there is no backup
   if [[ ! -f "/etc/thinkfan.conf.bak" ]]; then
-    cp /etc/thinkfan.conf /etc/thinkfan.conf.bak
+    sudo cp /etc/thinkfan.conf /etc/thinkfan.conf.bak
   fi
 
-  cp ./configs/thinkfan.conf /etc/thinkfan.conf
+  sudo cp "$thinkfan_file" "$dir_thinkfan"
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to copy thinkfan configuration file" >&2
+    return 1
+  fi
 
   # Modprobe thinkpad_acpi
   echo "options thinkpad_acpi fan_control=1 experimental=1" | sudo tee /etc/modprobe.d/thinkfan.conf
@@ -115,9 +111,9 @@ thinkfan_setup() {
   modprobe -v thinkpad_acpi
 
   echo "Enabling and starting thinkfan service..."
-  systemctl enable --now thinkfan
-  systemctl enable thinkfan-sleep
-  systemctl enable thinkfan-wakeup
+  sudo systemctl enable --now thinkfan
+  sudo systemctl enable thinkfan-sleep
+  sudo systemctl enable thinkfan-wakeup
 
   #thinkfan sleep hack for %100 fan usage on suspend:
   local thinkfan_sleep_hack="/etc/systemd/system/thinkfan-sleep-hack.service"
@@ -136,7 +132,7 @@ ExecStart=/usr/bin/bash -c '/usr/bin/echo "level auto" > /proc/acpi/ibm/fan'
 WantedBy=sleep.target
 EOF
   echo "Enabling thinkfan-sleep-hack service..."
-  systemctl enable thinkfan-sleep-hack
+  sudo systemctl enable thinkfan-sleep-hack
 
   echo "Thinkfan setup completed."
 }
@@ -145,15 +141,15 @@ xorg_setup_intel() {
   log_info "Setting up xorg configuration..."
   
   # Execute commands directly instead of using log_cmd
-  cp ./configs/99-touchpad.conf /etc/X11/xorg.conf.d/99-touchpad.conf
+  sudo cp "$intel_file" "$dir_intel"
   if [ $? -ne 0 ]; then
-    log_error "Failed to copy touchpad configuration"
+    log_error "Failed to copy Intel configuration file"
     return 1
   fi
-  
-  cp ./configs/20-intel.conf /etc/X11/xorg.conf.d/20-intel.conf
+
+  sudo cp "$touchpad_file" "$dir_touchpad"
   if [ $? -ne 0 ]; then
-    log_error "Failed to copy Intel configuration"
+    log_error "Failed to copy touchpad configuration file"
     return 1
   fi
   
@@ -165,16 +161,16 @@ install_qtile_udev_rule() {
   log_info "Setting up udev rule for qtile..."
   
   # Execute commands directly instead of using log_cmd
-  cp ./configs/99-qtile.rules /etc/udev/rules.d/99-qtile.rules
+  sudo cp "$qtile_rules_file" "$dir_qtile_rules"
   if [ $? -ne 0 ]; then
-    log_error "Failed to copy qtile udev rules"
+    log_error "Failed to copy udev rule for qtile"
     return 1
   fi
   
   log_info "Udev rule for qtile setup completed."
 
   # copy intel_backlight to xorg.conf.d
-  cp ./configs/99-backlight.conf /etc/X11/xorg.conf.d/99-backlight.conf
+  sudo cp "$backlight_file" "$dir_backlight"
   if [ $? -ne 0 ]; then
     log_error "Failed to copy backlight configuration"
     return 1
@@ -183,11 +179,21 @@ install_qtile_udev_rule() {
   log_info "Backlight configuration completed."
 
   # reload udev rules
-  udevadm control --reload-rules && udevadm trigger
+  sudo udevadm control --reload-rules
+  sudo udevadm trigger
   if [ $? -ne 0 ]; then
     log_error "Failed to reload udev rules"
     return 1
   fi
   
   log_info "Udev rules reloaded."
+}
+
+touchpad_setup() {
+  log_info "Setting up touchpad configuration..."
+    
+  # Create the touchpad configuration file as user
+  sudo cp "$touchpad_file" "$dir_touchpad"
+  
+  log_info "Touchpad configuration completed."
 }

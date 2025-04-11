@@ -43,8 +43,8 @@ install_librewolf() {
     fi
   fi
 
-  # Invoke dnf to install the package (assumed to be caught by a mock in tests)
-  dnf install -y librewolf
+  # Invoke sudo dnf to install the package (assumed to be caught by a mock in tests)
+  sudo dnf install -y librewolf
   log_info "Librewolf installation completed."
 
   # Copy the Firefox profile to the Librewolf directory.
@@ -61,7 +61,7 @@ install_librewolf() {
   log_info "Librewolf profile copied."
 
   # Write the Librewolf profile configuration file.
-  cat <<EOF >"$librewolf_profile"
+  local _profile_content=$(cat <<EOF
 [Profile1]
 Name=Default User
 IsRelative=1
@@ -81,6 +81,9 @@ Default=1
 StartWithLastProfile=1
 Version=2
 EOF
+)
+
+  echo "$_profile_content" > "$librewolf_profile"
 }
 
 # Function: modify_brave_desktop
@@ -104,7 +107,7 @@ modify_brave_desktop() {
   if [[ ! -f "$user_desktop_file" ]]; then
     if [[ -f "$system_desktop_file" ]]; then
       echo "Copying system desktop file to user directory..."
-      cp "$system_desktop_file" "$user_desktop_file" || {
+      sudo cp "$system_desktop_file" "$user_desktop_file" || {
         log_error "Failed to copy desktop file"
         return 1
       }
@@ -156,14 +159,14 @@ modify_brave_desktop() {
 # Purpose: Installs Brave Browser and then modifies its desktop shortcut.
 install_brave() {
   log_info "Installing Brave Browser..."
-  dnf install -y dnf-plugins-core
+  sudo dnf install -y sudo dnf-plugins-core
   log_info "Adding Brave Browser repository..."
 
   if [[ ! -f "${REPO_DIR}/brave-browser.repo" ]]; then
-    dnf config-manager addrepo --from-repofile=https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
+    sudo dnf config-manager addrepo --from-repofile=https://brave-browser-rpm-release.s3.brave.com/brave-browser.repo
   fi
 
-  dnf install -y brave-browser
+  sudo dnf install -y brave-browser
   log_info "Brave Browser installation completed."
 
   log_info "Modifying Brave Browser desktop file for password-store basic..."

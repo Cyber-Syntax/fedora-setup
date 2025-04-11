@@ -14,8 +14,8 @@ setup() {
   mkdir -p "$MOCK_ROOT/usr/bin"
   
   # Mock commands
-  function dnf() {
-    echo "Mock dnf: $*" >> "$BATS_TEST_TMPDIR/dnf.log"
+  function sudo dnf() {
+    echo "Mock sudo dnf: $*" >> "$BATS_TEST_TMPDIR/sudo dnf.log"
     
     # For successful installation, create fake binaries
     if [[ "$1" == "install" ]]; then
@@ -43,7 +43,7 @@ setup() {
       fi
     fi
     
-    # Handle dnf update
+    # Handle sudo dnf update
     if [[ "$1" == "update" ]]; then
       if [[ "$DNF_FAILS" == "true" ]]; then
         return 1
@@ -54,7 +54,7 @@ setup() {
     
     return 0
   }
-  export -f dnf
+  export -f sudo dnf
   
   function flatpak() {
     echo "Mock flatpak: $*" >> "$BATS_TEST_TMPDIR/flatpak.log"
@@ -121,9 +121,9 @@ teardown() {
   
   [ "$status" -eq 0 ]
   
-  # Verify dnf install was called
-  [ -f "$BATS_TEST_TMPDIR/dnf.log" ]
-  grep -q "Mock dnf: install -y" "$BATS_TEST_TMPDIR/dnf.log"
+  # Verify sudo dnf install was called
+  [ -f "$BATS_TEST_TMPDIR/sudo dnf.log" ]
+  grep -q "Mock sudo dnf: install -y" "$BATS_TEST_TMPDIR/sudo dnf.log"
   
   # Check success message was logged
   [[ "$output" == *"Qtile packages installation completed"* ]]

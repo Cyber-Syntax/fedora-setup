@@ -10,7 +10,7 @@ setup_mock_filesystem() {
   
   # Create common directory structure
   mkdir -p "$temp_dir/root/etc"
-  mkdir -p "$temp_dir/root/etc/dnf"
+  mkdir -p "$temp_dir/root/etc/sudo dnf"
   mkdir -p "$temp_dir/root/etc/yum.repos.d"
   mkdir -p "$temp_dir/root/etc/systemd/system"
   mkdir -p "$temp_dir/root/etc/X11/xorg.conf.d"
@@ -25,7 +25,7 @@ setup_mock_filesystem() {
   mkdir -p "$temp_dir/home/.mozilla/firefox/default"
   
   # Create common config files
-  touch "$temp_dir/root/etc/dnf/dnf.conf"
+  touch "$temp_dir/root/etc/sudo dnf/sudo dnf.conf"
   touch "$temp_dir/root/etc/fedora-release"
   echo "Fedora release 41 (Forty One)" > "$temp_dir/root/etc/fedora-release"
   
@@ -51,9 +51,9 @@ create_mock_command() {
 mock_dnf() {
   local log_file="$1"
   
-  function dnf() {
+  function sudo dnf() {
     local cmd="$1"
-    echo "Mock dnf: $*" >> "$log_file"
+    echo "Mock sudo dnf: $*" >> "$log_file"
     
     case "$cmd" in
       install)
@@ -87,7 +87,7 @@ mock_dnf() {
         ;;
     esac
   }
-  export -f dnf
+  export -f sudo dnf
 }
 
 # Create a mock systemctl command with common behaviors

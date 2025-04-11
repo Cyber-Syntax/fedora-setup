@@ -38,7 +38,7 @@ setup() {
   # Create a fake system Brave desktop file.
   echo 'Exec=/usr/bin/brave-browser-stable' >"$DESKTOP_SYSTEM_FILE"
 
-  # Insert our mocks folder into PATH so calls to dnf, curl, and pkexec are intercepted.
+  # Insert our mocks folder into PATH so calls to sudo dnf, curl, and pkexec are intercepted.
   export PATH="$REPO_ROOT/tests/mocks:$PATH"
 
   # Override USER variable to match current user for ownership operations
@@ -68,7 +68,7 @@ teardown() {
 
 @test "install_librewolf creates repo file, copies firefox profile, and writes profile.ini" {
   # Make sure DNF log will be created by touching it before running
-  touch "$BATS_TEST_TMPDIR/dnf.log"
+  touch "$BATS_TEST_TMPDIR/sudo dnf.log"
   
   # Debug what environment variables we have
   echo "firefox_profile=$firefox_profile" >&3
@@ -80,9 +80,9 @@ teardown() {
   # Check that the Librewolf repo file has been created.
   [ -f "$REPO_DIR/librewolf.repo" ]
 
-  # Check that the dnf mock ran and logged properly
-  [ -f "$BATS_TEST_TMPDIR/dnf.log" ]
-  grep -q "install -y librewolf" "$BATS_TEST_TMPDIR/dnf.log"
+  # Check that the sudo dnf mock ran and logged properly
+  [ -f "$BATS_TEST_TMPDIR/sudo dnf.log" ]
+  grep -q "install -y librewolf" "$BATS_TEST_TMPDIR/sudo dnf.log"
 
   # Debug the librewolf directory contents
   echo "LibreWolf dir contents:" >&3

@@ -115,8 +115,8 @@ setup() {
   }
   export -f akmods
   
-  function dnf() {
-    echo "Mock dnf: $*" >> "$BATS_TEST_TMPDIR/dnf.log"
+  function sudo dnf() {
+    echo "Mock sudo dnf: $*" >> "$BATS_TEST_TMPDIR/sudo dnf.log"
     if [[ "$1" == "copr" && "$2" == "enable" ]]; then
       # Create a fake repo file to simulate repo installation
       local repo_name="${3//\//_}"
@@ -132,7 +132,7 @@ setup() {
     fi
     return 0
   }
-  export -f dnf
+  export -f sudo dnf
   
   function lspci() {
     if [[ "$NVIDIA_GPU" == "true" ]]; then
@@ -344,8 +344,8 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify repository was enabled and packages installed
-  grep -q "dnf: copr enable shdwchn10/zenpower3 -y" "$BATS_TEST_TMPDIR/dnf.log"
-  grep -q "dnf: install -y zenpower3 zenmonitor3" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "sudo dnf: copr enable shdwchn10/zenpower3 -y" "$BATS_TEST_TMPDIR/sudo dnf.log"
+  grep -q "sudo dnf: install -y zenpower3 zenmonitor3" "$BATS_TEST_TMPDIR/sudo dnf.log"
   
   # Verify blacklist file was created
   [ -f "$MOCK_ROOT/etc/modprobe.d/zenpower.conf" ]
@@ -372,10 +372,10 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify CUDA repository was added
-  grep -q "dnf: config-manager addrepo" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "sudo dnf: config-manager addrepo" "$BATS_TEST_TMPDIR/sudo dnf.log"
   
   # Verify CUDA toolkit was installed
-  grep -q "dnf: -y install cuda-toolkit" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "sudo dnf: -y install cuda-toolkit" "$BATS_TEST_TMPDIR/sudo dnf.log"
 }
 
 @test "nvidia_cuda_setup fails on systems without NVIDIA GPU" {
@@ -405,7 +405,7 @@ teardown() {
   grep -q "akmods: --kernels" "$BATS_TEST_TMPDIR/akmods.log"
   
   # Verify repository was disabled
-  grep -q "dnf: --disablerepo rpmfusion-nonfree-nvidia-driver" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "sudo dnf: --disablerepo rpmfusion-nonfree-nvidia-driver" "$BATS_TEST_TMPDIR/sudo dnf.log"
 }
 
 @test "switch_nvidia_open fails when not root" {
@@ -432,9 +432,9 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify VA-API packages were installed
-  grep -q "dnf: install -y" "$BATS_TEST_TMPDIR/dnf.log"
-  [[ "$(cat $BATS_TEST_TMPDIR/dnf.log)" == *"meson"* ]]
-  [[ "$(cat $BATS_TEST_TMPDIR/dnf.log)" == *"nvidia-vaapi-driver"* ]]
+  grep -q "sudo dnf: install -y" "$BATS_TEST_TMPDIR/sudo dnf.log"
+  [[ "$(cat $BATS_TEST_TMPDIR/sudo dnf.log)" == *"meson"* ]]
+  [[ "$(cat $BATS_TEST_TMPDIR/sudo dnf.log)" == *"nvidia-vaapi-driver"* ]]
   
   # Verify environment variables were set
   [ -f "$MOCK_ROOT/etc/environment" ]
@@ -454,7 +454,7 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify GNOME packages were removed
-  grep -q "dnf: remove -y gnome-shell gnome-session gnome-desktop" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "sudo dnf: remove -y gnome-shell gnome-session gnome-desktop" "$BATS_TEST_TMPDIR/sudo dnf.log"
   
   # Check that NetworkManager status was verified after removal
   [[ "$output" == *"NetworkManager is still installed and preserved"* ]]

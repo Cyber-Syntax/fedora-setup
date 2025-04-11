@@ -2,7 +2,7 @@
 # Author: Serif Cyber-Syntax
 # License: BSD 3-Clause
 # Comprehensive installation and configuration script
-#for dnf-based systems.
+#for sudo dnf-based systems.
 
 # Bash settings for strict error checking.
 set -euo pipefail
@@ -32,14 +32,6 @@ if ! id "$USER" &>/dev/null; then
 
   exit 1
 fi
-
-# Check if the script is run as root.
-check_root() {
-  if [[ $EUID -ne 0 ]]; then
-    log_error "This script must be run as root. Use sudo or switch to root."
-    exit 1
-  fi
-}
 
 # Help message
 usage() {
@@ -149,13 +141,13 @@ install_system_specific_packages() {
   log_debug "Package list: ${pkg_list[*]}"
 
   # Install packages with error handling
-  if ! dnf install -y "${pkg_list[@]}"; then
+  if ! sudo dnf install -y "${pkg_list[@]}"; then
     echo "Error: Failed to install some $system_type packages. Trying individual installations..." >&2
 
     # Fallback to per-package installation
     for pkg in "${pkg_list[@]}"; do
       echo "Attempting to install $pkg..."
-      if ! dnf install -y "$pkg"; then
+      if ! sudo dnf install -y "$pkg"; then
         echo "Warning: Failed to install package $pkg" >&2
       fi
     done
@@ -166,14 +158,8 @@ install_system_specific_packages() {
 
 install_core_packages() {
   log_info "Updating repositories..."
-  dnf update -y || {
-    log_error "Failed to update repositories."
-    return 1
-  }
-
-  log_info "Installing core packages in one command..."
-  dnf install -y "${CORE_PACKAGES[@]}" || {
-    log_error "Failed to install core packages."
+  sudo dnf install -y "${CORE_PACKAGES[@]}" || {
+    log_error "Error: Failed to install core packages." >&2
     return 1
   }
 
@@ -182,53 +168,39 @@ install_core_packages() {
 
 install_flatpak_packages() {
   log_info "Installing Flatpak packages..."
+  
   # Setup flathub if not already setup
   flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-
-  # one line flatpak install
+  
+  # Install flatpak packages as the regular user
   flatpak install -y flathub "${FLATPAK_PACKAGES[@]}" || {
     log_error "Failed to install Flatpak packages."
     return 1
   }
+
   log_info "Flatpak packages installation completed."
 }
 
 #TEST: Both desktop and laptop
 trash_cli_setup() {
   log_info "Setting up trash-cli service..."
-  cat <<EOF >"$trash_cli_service"
-[Unit]
-Description=Trash-cli cleanup service
-After=network.target
-# The network dependency is optional, but good practice if your command relies on network availability.
 
-[Service]
-Type=oneshot
-User=developer
-# Adjust the path if trash-empty is not in /usr/bin. This command removes files older than 30 days.
-ExecStart=/usr/bin/trash-empty 30
+  # Create service file
+  sudo cp "$trash_cli_service_file" "$dir_trash_cli_service" || {
+    log_error "Failed to copy trash-cli service file"
+    return 1
+  } 
+    
+  # Create timer file
+  sudo cp "$trash_cli_timer_file" "$dir_trash_cli_timer" || {
+    log_error "Failed to copy trash-cli timer file"
+    return 1
+  }
 
-# No Restart option here because this is a one-shot service.
-EOF
-
-  cat <<EOF >"$trash_cli_timer"
-[Unit]
-Description=Daily timer for trash-cli cleanup
-
-[Timer]
-# Runs the service daily.
-OnCalendar=daily
-# Persistent makes sure that if the scheduled run was missed, it will run as soon as possible.
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-  log_info "Reloading systemd..."
-  systemctl daemon-reload
-  log_info "Enabling and starting trash-cli service..."
-  systemctl enable --now trash-cli.timer
+  log_info "Enabling trash-cli timer..."
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now trash-cli.timer
+  
   log_info "trash-cli service setup completed."
 }
 
@@ -239,19 +211,19 @@ grub_timeout() {
   # 1. Boot configuration - Safer GRUB_TIMEOUT modification
   # Backup original file
   if [[ ! -f "$boot_file.bak" ]]; then
-    cp -p "$boot_file" "$boot_file.bak"
+    sudo cp -p "$boot_file" "$boot_file.bak"
   fi
 
   # Update existing GRUB_TIMEOUT or add new entry
   if grep -q '^GRUB_TIMEOUT=' "$boot_file"; then
     # Replace any existing timeout value
-    sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' "$boot_file"
+    sudo sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' "$boot_file"
   else
     # Add new timeout setting after GRUB_CMDLINE_LINUX or at end of file
     if grep -q '^GRUB_CMDLINE_LINUX=' "$boot_file"; then
-      sed -i '/^GRUB_CMDLINE_LINUX=/a GRUB_TIMEOUT=0' "$boot_file"
+      sudo sed -i '/^GRUB_CMDLINE_LINUX=/a GRUB_TIMEOUT=0' "$boot_file"
     else
-      echo 'GRUB_TIMEOUT=0' >>"$boot_file"
+      sudo echo 'GRUB_TIMEOUT=0' >>"$boot_file"
     fi
   fi
 
@@ -265,13 +237,14 @@ grub_timeout() {
   #pcie_port_pm=off
 
   echo "Regenerating GRUB configuration..."
-  grub2-mkconfig -o /boot/grub2/grub.cfg
+  sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 
 }
 
 sudoers_setup() {
   # 4. Sudoers snippet (common for both systems).
-  # WARN: Is it secure to give this?
+  #TODO: sudoers.d folder is not work?
+  # switch to cp instead of cat 
   echo "Creating/updating sudoers snippet ($sudoers_file)..."
   cat <<EOF >"$sudoers_file"
 ## Allow borgbackup script to run without password
@@ -285,36 +258,15 @@ EOF
 }
 
 tcp_bbr_setup() {
-  # 3. TCP/BBR configuration - Append if missing
-  #FIXME: Couldn't write 'fq' to 'net/core/default_qdisc', ignoring: No such file or directory
-  #Couldn't write 'bbr' to 'net/ipv4/tcp_congestion_control', ignoring: No such file or directory
-  declare -A sysctl_params=(
-    ["net.core.default_qdisc"]="fq"
-    ["net.ipv4.tcp_congestion_control"]="bbr"
-    ["net.core.wmem_max"]="104857000"
-    ["net.core.rmem_max"]="104857000"
-    ["net.ipv4.tcp_rmem"]="4096 87380 104857000"
-    ["net.ipv4.tcp_wmem"]="4096 87380 104857000"
-  )
+  # Copy TCP BBR configuration file
+  echo "Setting up TCP BBR configuration..."
+  sudo cp "$tcp_bbr_file" "$dir_tcp_bbr" || {
+    log_error "Failed to copy TCP BBR configuration file"
+    return 1
+  }
 
-  for param in "${!sysctl_params[@]}"; do
-    if ! grep -qE "^$param = " "$tcp_bbr"; then
-      echo "$param = ${sysctl_params[$param]}" >>"$tcp_bbr"
-    fi
-  done
-
-  #   # 3. Increase internet speed with TCP/BBR (common for both systems).
-  #   echo "Overwriting network settings ($tcp_bbr)..."
-  #   cat <<EOF >"$tcp_bbr"
-  # net.core.default_qdisc=fq
-  # net.ipv4.tcp_congestion_control=bbr
-  # net.core.rmem_max=104857000
-  # net.core.wmem_max=104857000
-  # net.ipv4.tcp_rmem=4096 87380 104857000
-  # net.ipv4.tcp_wmem=4096 87380 104857000
-  # EOF
   echo "Reloading sysctl settings..."
-  sysctl --system
+  sudo sysctl --system
 
 }
 
@@ -357,7 +309,7 @@ EOF
   local pam_lightdm="/etc/pam.d/lightdm"
   # make a backup of the original file
   if [[ ! -f "$pam_lightdm.bak" ]]; then
-    cp "$pam_lightdm" "$pam_lightdm.bak"
+    sudo cp "$pam_lightdm" "$pam_lightdm.bak"
   fi
   echo "Setting up PAM configuration for LightDM..."
 
@@ -381,13 +333,13 @@ setup_files() {
 #Seems like this isn't called or work?
 nopasswdlogin_group() {
   echo "Creating group for passwordless login..."
-  groupadd -r nopasswdlogin 2>/dev/null || echo "Group 'nopasswdlogin' already exists."
-  groupadd -r autologin 2>/dev/null || echo "Group 'autologin' already exists."
-  gpasswd -a "$USER" nopasswdlogin
-  gpasswd -a "$USER" autologin
+  sudo groupadd -r nopasswdlogin 2>/dev/null || echo "Group 'nopasswdlogin' already exists."
+  sudo groupadd -r autologin 2>/dev/null || echo "Group 'autologin' already exists."
+  sudo gpasswd -a "$USER" nopasswdlogin
+  sudo gpasswd -a "$USER" autologin
   echo "Group created for passwordless login."
   echo "Add users to the nopasswdlogin group to enable passwordless login."
-  usermod -aG nopasswdlogin,autologin "$USER"
+  sudo usermod -aG nopasswdlogin,autologin "$USER"
 }
 
 # TEST: Install ProtonVPN repository and enable OpenVPN for SELinux.
@@ -412,8 +364,8 @@ install_protonvpn() {
   #  From       : https://repo.protonvpn.com/fedora-41-stable/public_key.asc
   # Is this ok [y/N]:
 
-  dnf install -y ./protonvpn.rpm && dnf check-update --refresh
-  dnf install -y proton-vpn-gnome-desktop
+  sudo dnf install -y ./protonvpn.rpm && sudo dnf check-update --refresh
+  sudo dnf install -y proton-vpn-gnome-desktop
   echo "ProtonVPN installation completed."
 
   echo "Enabling OpenVPN for SELinux..."
@@ -430,27 +382,34 @@ install_protonvpn() {
 system_updates() {
   echo "Running system updates..."
   for attempt in {1..3}; do
-    dnf autoremove -y && break
+    sudo dnf autoremove -y && break
     echo "Autoremove failed (attempt $attempt/3), retrying..."
     sleep $((attempt * 5))
   done || {
     echo "Failed to complete autoremove after 3 attempts"
     return 1
   }
-  fwupdmgr get-devices
-  fwupdmgr refresh --force
-  fwupdmgr get-updates -y
-  fwupdmgr update -y
+  #TODO: This command dangerous because of boot update can cause problems
+  # maybe get only updates and show them to user
+  # fwupdmgr get-devices
+  # fwupdmgr refresh --force
+  # fwupdmgr get-updates -y
+  # fwupdmgr update -y
   echo "System updates completed. (TEST: Review update logs for any errors.)"
 }
+
 # Syncthing setup
 syncthing_setup() {
-  echo "Setting up Syncthing..."
-  #FIX: this script run root which cause this "Failed to connect to user scope bus via local transport: No medium found"
-  # need to run this without root or find a workaround
-  #NOTE: it was already running though??
+  log_info "Setting up Syncthing..."
+  
+  # For user-specific services, don't use sudo
   systemctl --user enable --now syncthing
-  echo "Syncthing enabled."
+  if [ $? -ne 0 ]; then
+    log_error "Failed to enable Syncthing service"
+    return 1
+  fi
+  
+  log_info "Syncthing enabled successfully."
 }
 
 # Switch display manager to lightdm
@@ -458,18 +417,18 @@ switch_lightdm() {
   log_info "Switching display manager to LightDM..."
   
   # Execute commands directly instead of using log_cmd
-  dnf install -y lightdm
+  sudo dnf install -y lightdm
   if [ $? -ne 0 ]; then
     log_error "Failed to install LightDM"
     return 1
   fi
   
-  systemctl disable gdm
+  sudo systemctl disable gdm
   if [ $? -ne 0 ]; then
     log_warn "Failed to disable GDM, it might not be installed"
   fi
   
-  systemctl enable lightdm
+  sudo systemctl enable lightdm
   if [ $? -ne 0 ]; then
     log_error "Failed to enable LightDM"
     return 1
@@ -480,44 +439,21 @@ switch_lightdm() {
 
 # neovim clearing
 clear_neovim() {
-  log_info "Backup neoVim configuration..."
-  
-  # Execute commands directly instead of using log_cmd
-  mv ~/.local/share/nvim{,.bak} 2>/dev/null || log_warn "Failed to backup nvim share directory"
-  mv ~/.local/state/nvim{,.bak} 2>/dev/null || log_warn "Failed to backup nvim state directory"
-  mv ~/.cache/nvim{,.bak} 2>/dev/null || log_warn "Failed to backup nvim cache directory"
+  echo "Backup neoVim configuration..."
+  mv ~/.local/share/nvim{,.bak}
+  mv ~/.local/state/nvim{,.bak}
+  mv ~/.cache/nvim{,.bak}
 }
 
 # oh-my-zsh setup
-#TEST: This probably going to be cause issue because of script run as root.
-# TODO: need to find a solution for this.
-ohmyzsh_setup() {
-  log_info "Installing oh-my-zsh..."
-  
-  # Execute commands directly instead of using log_cmd
+oh_my_zsh_setup() {
+  echo "Installing oh-my-zsh..."
   sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-  if [ $? -ne 0 ]; then
-    log_error "Failed to install Oh My Zsh"
-    return 1
-  fi
   
   #TODO: plugins installation: currently manual, need automation with package managers like dnf probably
   git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-  if [ $? -ne 0 ]; then
-    log_warn "Failed to clone zsh-syntax-highlighting"
-  fi
-  
   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-  if [ $? -ne 0 ]; then
-    log_warn "Failed to clone zsh-autosuggestions"
-  fi
-  
   git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
-  if [ $? -ne 0 ]; then
-    log_warn "Failed to clone powerlevel10k theme"
-  fi
-  
-  # How to solve root issue?
 }
 
 #TEST: fedora mirror country change to get good speeds
@@ -551,7 +487,7 @@ ssh_setup_laptop() {
   log_info "Setting up SSH for laptop"
 
   # Enable password authentication to be able to receive keys
-  systemctl enable --now sshd
+  sudo systemctl enable --now sshd
   if [ $? -ne 0 ]; then
     log_error "Failed to enable SSH service"
     return 1
@@ -594,7 +530,7 @@ install_vscode() {
     return 1
   fi
 
-  dnf check-update
+  sudo dnf check-update
   sudo dnf install -y code
   if [ $? -ne 0 ]; then
     log_error "Failed to install VS Code"
@@ -607,8 +543,6 @@ install_vscode() {
 # --- Main function ---
 
 main() {
-  check_root
-
   # Quick check for help option.
   if [[ "$#" -eq 1 && "$1" == "-h" ]]; then
     usage
@@ -616,7 +550,7 @@ main() {
 
   log_debug "Initializing script with args: $*"
 
-  # Initialize dnf speed first
+  # Initialize sudo dnf speed first
   #TODO: Is there a better way to do this?
   speed_up_dnf || log_warn "Failed to optimize DNF configuration"
 

@@ -19,7 +19,7 @@ setup() {
   mkdir -p "$LOG_DIR"
   
   # Set up mock commands
-  mock_dnf "$BATS_TEST_TMPDIR/dnf.log"
+  mock_dnf "$BATS_TEST_TMPDIR/sudo dnf.log"
   mock_systemctl "$BATS_TEST_TMPDIR/systemctl.log"
   
   # Mock additional commands used by setup.sh
@@ -231,7 +231,7 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify desktop packages installation was attempted
-  grep -q "Mock dnf: install -y" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "Mock sudo dnf: install -y" "$BATS_TEST_TMPDIR/sudo dnf.log"
 }
 
 @test "setup.sh installs system-specific packages for laptop" {
@@ -246,5 +246,5 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify laptop packages installation was attempted
-  grep -q "Mock dnf: install -y" "$BATS_TEST_TMPDIR/dnf.log"
+  grep -q "Mock sudo dnf: install -y" "$BATS_TEST_TMPDIR/sudo dnf.log"
 }

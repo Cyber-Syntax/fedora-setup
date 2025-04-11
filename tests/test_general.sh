@@ -10,13 +10,13 @@ setup() {
   
   # Create necessary directories and mock files
   export MOCK_ROOT="$BATS_TEST_TMPDIR/root"
-  mkdir -p "$MOCK_ROOT/etc/dnf" "$MOCK_ROOT/etc/sysctl.d" "$MOCK_ROOT/etc/sudoers.d"
+  mkdir -p "$MOCK_ROOT/etc/sudo dnf" "$MOCK_ROOT/etc/sysctl.d" "$MOCK_ROOT/etc/sudoers.d"
   
   # Create mock DNF config file
-  echo -e "# DNF Config file\n[main]\ninstallonly_limit=3" > "$MOCK_ROOT/etc/dnf/dnf.conf"
+  echo -e "# DNF Config file\n[main]\ninstallonly_limit=3" > "$MOCK_ROOT/etc/sudo dnf/sudo dnf.conf"
   
   # Set file paths to use mock root
-  export dnf_conf="$MOCK_ROOT/etc/dnf/dnf.conf"
+  export dnf_conf="$MOCK_ROOT/etc/sudo dnf/sudo dnf.conf"
   export tcp_bbr="$MOCK_ROOT/etc/sysctl.d/99-tcp-bbr.conf"
   export sudoers_file="$MOCK_ROOT/etc/sudoers.d/custom-conf"
   
@@ -45,7 +45,7 @@ setup() {
 
   # speed_up_dnf implementation
   speed_up_dnf() {
-    # Backup dnf.conf
+    # Backup sudo dnf.conf
     cp "$dnf_conf" "${dnf_conf}.bak" || return 1
     
     # Add our settings
@@ -138,7 +138,7 @@ teardown() {
   fi
 }
 
-@test "speed_up_dnf updates dnf.conf with performance settings" {
+@test "speed_up_dnf updates sudo dnf.conf with performance settings" {
   run speed_up_dnf
   
   [ "$status" -eq 0 ]

@@ -1,10 +1,10 @@
 #!/bin/bash
-# Make sure the dnf.log directory exists
-mkdir -p "$(dirname "$BATS_TEST_TMPDIR/dnf.log")"
+# Make sure the sudo dnf.log directory exists
+mkdir -p "$(dirname "$BATS_TEST_TMPDIR/sudo dnf.log")"
 
-# Log all dnf commands - ensure the file is created even if empty
-touch "$BATS_TEST_TMPDIR/dnf.log"
-echo "$@" >>"$BATS_TEST_TMPDIR/dnf.log"
+# Log all sudo dnf commands - ensure the file is created even if empty
+touch "$BATS_TEST_TMPDIR/sudo dnf.log"
+echo "$@" >>"$BATS_TEST_TMPDIR/sudo dnf.log"
 
 # Simulate package installation
 if [[ "$1" == "install" ]]; then

@@ -38,59 +38,57 @@ borgbackup_setup() {
   # send sh script to /opt/borg/home-borgbackup.sh
   log_info "Moving borgbackup script to /opt/borg/home-borgbackup.sh..."
 
-  # Check directory, create if not exists
-  if [[ ! -d "/opt/borg" ]]; then
-    log_debug "Creating /opt/borg directory"
-    mkdir -p "/opt/borg" || {
-      log_error "Failed to create /opt/borg directory"
+  # check opt/borg directory
+  if [ ! -d /opt/borg ]; then
+    log_debug "Creating /opt/borg directory..."
+    sudo mkdir -p /opt/borg
+  fi
+  # copy script to /opt/borg
+  if [ ! -f /opt/borg/home-borgbackup.sh ]; then
+    log_debug "Copying home-borgbackup.sh to /opt/borg..."
+    sudo cp "$borg_script_file" "$dir_borg_script"
+    if [ $? -ne 0 ]; then
+      log_error "Failed to copy home-borgbackup.sh to /opt/borg"
       return 1
-    }
-  fi
-  # move from ~/Documents/scripts/desktop/borg/home-borgbackup.sh
-  if ! mv "$borgbackup_script" "$move_opt_dir"; then
-    log_error "Failed to move borgbackup script"
-    return 1
-  fi
-
-  log_info "Setting up borgbackup service..."
-  cat <<EOF >"$borgbackup_service"
-[Unit]
-Description=Home Backup using BorgBackup
-
-[Service]
-Type=oneshot
-ExecStart=/opt/borg/home-borgbackup.sh
-EOF
-
-  cat <<EOF >"$borgbackup_timer"
-[Unit]
-Description=Timer for Home Backup using BorgBackup
-
-[Timer]
-# Schedules the backup at 10:00 every day.
-OnCalendar=*-*-* 10:00:00
-Persistent=true
-# Note: systemd timers work with local time. To follow Europe/Istanbul time, ensure your system’s timezone is set accordingly.
-
-[Install]
-WantedBy=timers.target
-EOF
-
-  log_info "Reloading systemd..."
-  systemctl daemon-reload
-  if [ $? -ne 0 ]; then
-    log_error "Failed to reload systemd"
-    return 1
-  fi
-  
-  log_info "Enabling and starting borgbackup service..."
-  systemctl enable --now borgbackup-home.timer
-  if [ $? -eq 0 ]; then
-    log_info "borgbackup service setup completed."
+    fi
   else
-    log_error "Failed to enable borgbackup service"
+    log_debug "home-borgbackup.sh already exists in /opt/borg"
+  fi
+
+  # check if borgbackup is installed
+  if ! command -v borg &>/dev/null; then
+    log_debug "Borgbackup is not installed, installing..."
+    sudo dnf install -y borgbackup
+    if [ $? -ne 0 ]; then
+      log_error "Failed to install Borgbackup"
+      return 1
+    fi
+  else
+    log_debug "Borgbackup is already installed"
+  fi
+
+  # cp timer, service
+  sudo cp "$borg_service_file" "$dir_borg_service"
+  if [ $? -ne 0 ]; then
+    log_error "Failed to copy borgbackup service file"
     return 1
   fi
+  sudo cp "$borg_timer_file" "$dir_borg_timer"
+  if [ $? -ne 0 ]; then
+    log_error "Failed to copy borgbackup timer file"
+    return 1
+  fi
+  # enable and start timer
+  log_debug "Enabling and starting borgbackup timer..."
+  sudo systemctl enable --now borgbackup.timer
+  if [ $? -ne 0 ]; then
+    log_error "Failed to enable and start borgbackup timer"
+    return 1
+  fi
+  # end if everything is ok
+  log_info "Borgbackup setup completed successfully"
+  log_debug "Borgbackup timer is enabled and started"
+  
 }
 
 # Autologin for gdm
@@ -146,14 +144,14 @@ zenpower_setup() {
   fi
 
   log_debug "Enabling zenpower3 COPR repository..."
-  dnf copr enable shdwchn10/zenpower3 -y
+  sudo dnf copr enable shdwchn10/zenpower3 -y
   if [ $? -ne 0 ]; then
     log_error "Failed to enable zenpower3 COPR repository"
     return 1
   fi
 
   log_debug "Installing zenpower3 and zenmonitor3..."
-  dnf install -y zenpower3 zenmonitor3
+  sudo dnf install -y zenpower3 zenmonitor3
   if [ $? -ne 0 ]; then
     log_error "Failed to install zenpower packages"
     return 1
@@ -188,35 +186,35 @@ nvidia_cuda_setup() {
   cuda_repo="https://developer.download.nvidia.com/compute/cuda/repos/fedora41/${arch}/cuda-fedora41.repo"
 
   log_debug "Adding CUDA repository..."
-  dnf config-manager addrepo --from-repofile="$cuda_repo"
+  sudo dnf config-manager addrepo --from-repofile="$cuda_repo"
   if [ $? -ne 0 ]; then
     log_error "Failed to add CUDA repository"
     return 1
   fi
 
   log_debug "Cleaning DNF cache..."
-  dnf clean all
+  sudo dnf clean all
   if [ $? -ne 0 ]; then
     log_error "Failed to clean DNF cache"
     return 1
   fi
 
   log_debug "Disabling nvidia-driver module..."
-  dnf module disable -y nvidia-driver
+  sudo dnf module disable -y nvidia-driver
   if [ $? -ne 0 ]; then
     log_warn "Failed to disable nvidia-driver module - this might be normal on Fedora 41"
   fi
 
   log_debug "Setting package exclusions..."
   local exclude_pkgs="nvidia-driver,nvidia-modprobe,nvidia-persistenced,nvidia-settings,nvidia-libXNVCtrl,nvidia-xconfig"
-  dnf config-manager setopt "cuda-fedora41-${arch}.exclude=${exclude_pkgs}"
+  sudo dnf config-manager setopt "cuda-fedora41-${arch}.exclude=${exclude_pkgs}"
   if [ $? -ne 0 ]; then
     log_error "Failed to set package exclusions"
     return 1
   fi
 
   log_debug "Installing CUDA toolkit..."
-  dnf -y install cuda-toolkit
+  sudo dnf -y install cuda-toolkit
   if [ $? -ne 0 ]; then
     log_error "Failed to install CUDA toolkit"
     return 1
@@ -271,7 +269,7 @@ switch_nvidia_open() {
   fi
 
   log_debug "Disabling RPMFusion non-free NVIDIA driver repository..."
-  dnf --disablerepo rpmfusion-nonfree-nvidia-driver
+  sudo dnf --disablerepo rpmfusion-nonfree-nvidia-driver
   if [ $? -ne 0 ]; then
     log_error "Failed to disable RPMFusion non-free NVIDIA driver repository"
     return 1
@@ -307,7 +305,7 @@ vaapi_setup() {
     "gstreamer1-plugins-bad-free-devel"
   )
 
-  dnf install -y "${packages[@]}"
+  sudo dnf install -y "${packages[@]}"
   if [ $? -ne 0 ]; then
     log_error "Failed to install VA-API packages"
     return 1
@@ -384,7 +382,7 @@ remove_gnome() {
   fi
 
   log_debug "Removing GNOME packages..."
-  dnf remove -y "${gnome_packages[@]}"
+  sudo dnf remove -y "${gnome_packages[@]}"
   if [ $? -ne 0 ]; then
     log_error "Failed to remove GNOME packages"
     return 1
