@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+# Source the logging module
+source src/logging.sh
+
 install_qtile_packages() {
-  echo "Installing Qtile packages..."
+
   local qtile_packages=(
     feh
     picom
@@ -18,11 +21,10 @@ install_qtile_packages() {
   )
   # one line install
   dnf install -y "${qtile_packages[@]}" || {
-    echo "Error: Failed to install Qtile packages." >&2
+    log_error "Failed to install Qtile packages."
     return 1
   }
 
-  echo "Qtile packages installation completed."
 }
 
 CORE_PACKAGES=(

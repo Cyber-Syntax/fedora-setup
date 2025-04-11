@@ -1,3 +1,14 @@
-*test*
+tests/tmp/
+# Temporary test files
+temp.*
+test_tmp/
+
+# temporary files
+tests/home*
+tests/root*
+
+# BATS temporary files
+*.bats.log
+bats-core/
 session.vim
 protonvpn.rpm

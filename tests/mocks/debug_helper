@@ -1,0 +1,4 @@
+#!/bin/bash
+# Run after test failure to inspect environment
+echo "Test Artifacts: $TMPDIR"
+find "$TMPDIR"

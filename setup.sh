@@ -9,6 +9,7 @@ set -euo pipefail
 IFS=$'\n\t'
 
 # Source additional functions from separate files.
+source src/logging.sh
 source src/variables.sh
 source src/packages.sh
 source src/general.sh
@@ -18,7 +19,7 @@ source src/laptop.sh
 
 # Variable notifying the user that the script is running.
 if ! id "$USER" &>/dev/null; then
-  echo "WARNING: You forget to change variables according to your needs."
+  log_warn "You forget to change variables according to your needs. Go src/variables.sh and change according to your needs."
   # Check if user forgot to change the VARIABLES.
   if [ -n "$SUDO_USER" ]; then
     whoami="$SUDO_USER"
@@ -26,8 +27,8 @@ if ! id "$USER" &>/dev/null; then
     whoami=$(whoami)
   fi
 
-  echo "Script USER variable is: $USER but your username: $whoami."
-  echo "Please change the USER variable and other variables according to your system configuration."
+  log_warn "Script USER variable is: $USER but your username: $whoami."
+  log_warn "Please change the USER variable and other variables according to your system configuration."
 
   exit 1
 fi
@@ -35,7 +36,7 @@ fi
 # Check if the script is run as root.
 check_root() {
   if [[ $EUID -ne 0 ]]; then
-    echo "Error: This script must be run as root. Use sudo or switch to root." >&2
+    log_error "This script must be run as root. Use sudo or switch to root."
     exit 1
   fi
 }
@@ -64,6 +65,7 @@ NOTE: Below options consider safe to use but still be careful.
   -F    Install Flatpak packages.
   -l    Install Librewolf browser.
   -L    Install Lazygit.
+  -U    Switch UFW from firewald and enable it.
   -q    Install Qtile packages.
   -Q    Qtile udev rule for xbacklight.
   -r    Enable RPM Fusion repositories.
@@ -98,17 +100,16 @@ detect_system_type() {
   local hostname detected_type
   hostname=$(hostname 2>/dev/null || echo "unknown")
 
-  # Send diagnostic messages to stderr
-  echo "Detected hostname: $hostname" >&2
+  log_debug "Detected hostname: $hostname"
 
   if [[ "$hostname" == "$hostname_desktop" ]]; then
     detected_type="desktop"
   elif [[ "$hostname" == "$hostname_laptop" ]]; then
     detected_type="laptop"
   else
-    echo "Error: Unknown hostname '$hostname'. Expected:" >&2
-    echo "Desktop: $hostname_desktop" >&2
-    echo "Laptop:  $hostname_laptop" >&2
+    log_error "Unknown hostname '$hostname'. Expected:"
+    log_error "Desktop: $hostname_desktop"
+    log_error "Laptop:  $hostname_laptop"
     exit 1
   fi
 
@@ -118,30 +119,34 @@ detect_system_type() {
 
 # Install system-specific packages
 install_system_specific_packages() {
-  local system_type=$(detect_system_type)
+  local system_type
+  system_type=$(detect_system_type)
+  system_type=$(detect_system_type)
   # local system_type="${1:-unknown}"
   local pkg_list=()
 
   case "$system_type" in
   desktop)
-    echo "Installing desktop-specific packages..."
+    log_info "Installing desktop-specific packages..."
     pkg_list=("${DESKTOP_PACKAGES[@]}")
     ;;
   laptop)
-    echo "Installing laptop-specific packages..."
+    log_info "Installing laptop-specific packages..."
     pkg_list=("${LAPTOP_PACKAGES[@]}")
     ;;
   *)
-    echo "Warning: Unknown system type '$system_type'. Skipping system-specific packages." >&2
+    log_warn "Unknown system type '$system_type'. Skipping system-specific packages."
     return 0
     ;;
   esac
 
   # Check if package list is empty
   if [[ ${#pkg_list[@]} -eq 0 ]]; then
-    echo "Warning: No packages defined for $system_type installation" >&2
+    log_warn "No packages defined for $system_type installation"
     return 0
   fi
+
+  log_debug "Package list: ${pkg_list[*]}"
 
   # Install packages with error handling
   if ! dnf install -y "${pkg_list[@]}"; then
@@ -160,37 +165,37 @@ install_system_specific_packages() {
 }
 
 install_core_packages() {
-  echo "Updating repositories..."
+  log_info "Updating repositories..."
   dnf update -y || {
-    echo "Error: Failed to update repositories." >&2
+    log_error "Failed to update repositories."
     return 1
   }
 
-  echo "Installing core packages in one command..."
+  log_info "Installing core packages in one command..."
   dnf install -y "${CORE_PACKAGES[@]}" || {
-    echo "Error: Failed to install core packages." >&2
+    log_error "Failed to install core packages."
     return 1
   }
 
-  echo "Core packages installation completed."
+  log_info "Core packages installation completed."
 }
 
 install_flatpak_packages() {
-  echo "Installing Flatpak packages..."
+  log_info "Installing Flatpak packages..."
   # Setup flathub if not already setup
   flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
   # one line flatpak install
   flatpak install -y flathub "${FLATPAK_PACKAGES[@]}" || {
-    echo "Error: Failed to install Flatpak packages." >&2
+    log_error "Failed to install Flatpak packages."
     return 1
   }
-  echo "Flatpak packages installation completed."
+  log_info "Flatpak packages installation completed."
 }
 
 #TEST: Both desktop and laptop
 trash_cli_setup() {
-  echo "Setting up trash-cli service..."
+  log_info "Setting up trash-cli service..."
   cat <<EOF >"$trash_cli_service"
 [Unit]
 Description=Trash-cli cleanup service
@@ -220,11 +225,11 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-  echo "Reloading systemd..."
+  log_info "Reloading systemd..."
   systemctl daemon-reload
-  echo "Enabling and starting trash-cli service..."
+  log_info "Enabling and starting trash-cli service..."
   systemctl enable --now trash-cli.timer
-  echo "trash-cli service setup completed."
+  log_info "trash-cli service setup completed."
 }
 
 # This functions configures boot (GRUB), sysctl for TCP/BBR, and sudoers.
@@ -263,8 +268,8 @@ grub_timeout() {
   grub2-mkconfig -o /boot/grub2/grub.cfg
 
 }
-sudoers_setup() {
 
+sudoers_setup() {
   # 4. Sudoers snippet (common for both systems).
   # WARN: Is it secure to give this?
   echo "Creating/updating sudoers snippet ($sudoers_file)..."
@@ -280,7 +285,6 @@ EOF
 }
 
 tcp_bbr_setup() {
-
   # 3. TCP/BBR configuration - Append if missing
   #FIXME: Couldn't write 'fq' to 'net/core/default_qdisc', ignoring: No such file or directory
   #Couldn't write 'bbr' to 'net/ipv4/tcp_congestion_control', ignoring: No such file or directory
@@ -304,8 +308,8 @@ tcp_bbr_setup() {
   #   cat <<EOF >"$tcp_bbr"
   # net.core.default_qdisc=fq
   # net.ipv4.tcp_congestion_control=bbr
-  # net.core.wmem_max=104857000
   # net.core.rmem_max=104857000
+  # net.core.wmem_max=104857000
   # net.ipv4.tcp_rmem=4096 87380 104857000
   # net.ipv4.tcp_wmem=4096 87380 104857000
   # EOF
@@ -317,7 +321,8 @@ tcp_bbr_setup() {
 lightdm_autologin() {
 
   local conf_file="/etc/lightdm/lightdm.conf"
-  local tmp_file=$(mktemp)
+  local tmp_file
+  tmp_file=$(mktemp)
 
   # Preserve existing content
   [[ -f "$conf_file" ]] && cat "$conf_file" >"$tmp_file"
@@ -347,24 +352,6 @@ EOF
   # Install new config
   install -m 644 -o root -g root "$tmp_file" "$conf_file"
   rm "$tmp_file"
-
-  #   # 2. Autologin lightdm
-  #   local lightdm_custom="/etc/lightdm/lightdm.conf"
-  #   # backup
-  #   if [[ ! -f "$lightdm_custom.bak" ]]; then
-  #     cp "$lightdm_custom" "$lightdm_custom.bak"
-  #   fi
-  #
-  #   echo "Overwriting LightDM configuration ($lightdm_custom) for $system_type..."
-  #   cat <<EOF >"$lightdm_custom"
-  # [Seat:*]
-  # autologin-guest=false
-  # autologin-user=$USER
-  # autologin-session=$SESSION
-  # autologin-user-timeout=0
-  # autologin-in-background=false
-  # EOF
-  #
 
   #Pam setup needed on lightdm
   local pam_lightdm="/etc/pam.d/lightdm"
@@ -468,61 +455,60 @@ syncthing_setup() {
 
 # Switch display manager to lightdm
 switch_lightdm() {
-  echo "Switching display manager to LightDM..."
-  dnf install -y lightdm
-  systemctl disable gdm
-  systemctl enable lightdm
+  log_info "Switching display manager to LightDM..."
+  log_cmd "dnf install -y lightdm"
+  log_cmd "systemctl disable gdm"
+  log_cmd "systemctl enable lightdm"
 
-  echo "Display manager switched to LightDM."
+  log_info "Display manager switched to LightDM."
 }
 
 # neovim clearing
 clear_neovim() {
-  echo "Backup neoVim configuration..."
-  mv ~/.local/share/nvim{,.bak}
-  mv ~/.local/state/nvim{,.bak}
-  mv ~/.cache/nvim{,.bak}
+  log_info "Backup neoVim configuration..."
+  log_cmd "mv ~/.local/share/nvim{,.bak}" || log_warn "Failed to backup nvim share directory"
+  log_cmd "mv ~/.local/state/nvim{,.bak}" || log_warn "Failed to backup nvim state directory"
+  log_cmd "mv ~/.cache/nvim{,.bak}" || log_warn "Failed to backup nvim cache directory"
 }
 #TODO: ip change
 
 # oh-my-zsh setup
 #TEST: This probably going to be cause issue because of script run as root.
 # TODO: need to find a solution for this.
-oh_my_zsh_setup() {
-  echo "Installing oh-my-zsh..."
-  sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+ohmyzsh_setup() {
+  log_info "Installing oh-my-zsh..."
+  log_cmd "sh -c '$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)'"
   #TODO: plugins installation: currently manual, need automation with package managers like dnf probably
-  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-  git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-  git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k
+  log_cmd "git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
+  log_cmd "git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
+  log_cmd "git clone https://github.com/romkatv/powerlevel10k.git $ZSH_CUSTOM/themes/powerlevel10k"
   # How to solve root issue?
 }
 
 #TEST: fedora mirror country change to get good speeds
 #TODO: need little research on this to make it more efficient
 mirror_country_change() {
-  echo "Changing Fedora mirror country..."
+  log_info "Changing Fedora mirror country..."
   # on /etc/yum.repos.d/fedora.repo and similar repos need only `&country=de` in the end on metalink
   # metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$basearch&country=de
   # variable mirror_country="de" handled on variable.sh
   # also there is 3 metalink on the files generally, [fedora-source], [fedora] and [fedora-debuginfo]
   # also need to commeent t he baseurl
-
 }
 
 #TEST: When you use same home partition when you switch distro, selinux context is not correct
 #TODO: add option
-selinux_restorecon() {
-  echo "Restoring SELinux context for home directory..."
-  restorecon -R /home/
+selinux_context() {
+  log_info "Restoring SELinux context for home directory..."
+  log_cmd "restorecon -R /home/"
 }
 
 # sshd setup, copy ssh keys to laptop from desktop etc.
 ssh_setup_laptop() {
-  echo "Setting up SSH for laptop"
+  log_info "Setting up SSH for laptop"
 
   # Enable password authentication to be able to receive keys
-  systemctl enable --now sshd
+  log_cmd "systemctl enable --now sshd"
   # Write sshd config to allow password authentication
   #TODO: Add some security here
   cat <<EOF >/etc/ssh/sshd_config.d/temp_password_auth.conf
@@ -530,14 +516,23 @@ PasswordAuthentication yes
 PermitRootLogin no
 PermitEmptyPasswords yes
 EOF
-  echo "SSH password authentication enabled for laptop."
-}
-ssh_setup_desktop() {
-  echo "Setting up SSH..."
+  log_info "SSH password authentication enabled for laptop."
+  log_info "Setting up SSH..."
 
   # TODO: need to create keys but if they are not created yet.
   # NOTE: desktop sends keys to laptop here
-  ssh-copy-id $USER@$LAPTOP_IP
+  log_cmd "ssh-copy-id $USER@$LAPTOP_IP"
+}
+
+# Install vscode
+install_vscode() {
+  log_info "Installing Visual Studio Code..."
+  #FIX: need proper way handle
+  sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+  echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null
+
+  dnf check-update
+  sudo dnf install code # or code-insiders
 }
 
 # TODO: mpv setup
@@ -566,9 +561,11 @@ main() {
     usage
   fi
 
+  log_debug "Initializing script with args: $*"
+
   # Initialize dnf speed first
   #TODO: Is there a better way to do this?
-  speed_up_dnf
+  speed_up_dnf || log_warn "Failed to optimize DNF configuration"
 
   # Initialize option flags.
   all_option=false
@@ -589,6 +586,7 @@ main() {
   syncthing_option=false
 
   # New experimental option flags.
+  ufw_option=false
   qtile_udev_option=false
   touchpad_option=false
   thinkfan_option=false
@@ -602,7 +600,7 @@ main() {
   update_system_option=false
 
   # Process command-line options.
-  while getopts "abBcdFfghIilLnopPrstTuvzqQx" opt; do
+  while getopts "abBcdFfghIilLnNopPrstTuUvzqQx" opt; do
     case $opt in
     a) all_option=true ;;
     b) brave_option=true ;;
@@ -630,6 +628,7 @@ main() {
     t) trash_cli_option=true ;;
     T) tlp_option=true ;;
     u) update_system_option=true ;;
+    U) ufw_option=true ;;
     z) zenpower_option=true ;;
     h) usage ;;
     *) usage ;;
@@ -663,19 +662,20 @@ main() {
     [[ "$switch_nvidia_open_option" == "false" ]] &&
     [[ "$vaapi_option" == "false" ]] &&
     [[ "$protonvpn_option" == "false" ]] &&
+    [[ "$ufw_option" == "false" ]] &&
     [[ "$update_system_option" == "false" ]]; then
+    log_warn "No options specified"
     usage
   fi
 
-  # Detect system type.
   system_type=$(detect_system_type)
-  echo "Detected system type: $system_type"
+  log_info "Detected system type: $system_type"
 
-  # Determine if core packages are needed.
   local need_core_packages=false
   #TESTING: new options lazygit,ufw and add more if needed
   if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option || $syncthing_option || $ufw_option || $lazygit_option; then
     need_core_packages=true
+    log_debug "Core packages are needed due to selected options"
   fi
 
   # Install core packages.
@@ -694,14 +694,14 @@ main() {
   fi
 
   if $all_option; then
-    echo "Executing all additional functions..."
+    log_info "Executing all additional functions..."
 
     install_system_specific_packages "$system_type"
 
     # System-specific additional functions.
     #NOTE: This starts first to make sure hostname is changed first
     if [[ "$system_type" == "laptop" ]]; then
-      echo "Executing laptop-specific functions..."
+      log_info "Executing laptop-specific functions..."
       laptop_hostname_change
       #TEST: Currently on laptop but can be used on globally when desktop switch lightdm
       nopasswdlogin_group
@@ -709,7 +709,7 @@ main() {
       thinkfan_setup
       touchpad_setup
     elif [[ "$system_type" == "desktop" ]]; then
-      echo "Executing desktop-specific functions..."
+      log_info "Executing desktop-specific functions..."
       # Desktop-specific functions could be added here.
       switch_nvidia_open
       nvidia_cuda_setup
@@ -737,7 +737,8 @@ main() {
     install_flatpak_packages
 
   else
-    echo "Executing selected additional functions..."
+    log_info "Executing selected additional functions..."
+    if $ufw_option; then switch_ufw_setup; fi
     if $lazygit_option; then install_lazygit; fi
     if $install_core_packages_option; then install_core_packages; fi
     if $install_system_specific_packages_option; then install_system_specific_packages "$system_type"; fi
@@ -766,7 +767,7 @@ main() {
     if $update_system_option; then system_updates; fi
   fi
 
-  echo "Script execution completed."
+  log_info "Script execution completed."
 }
 
 # Execute main with provided command-line arguments.

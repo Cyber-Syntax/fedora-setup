@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 
+source src/logging.sh
+source src/variables.sh
+
 laptop_hostname_change() {
-  echo "Changing hostname for laptop..."
-  hostnamectl set-hostname "$hostname_laptop"
-  echo "Hostname changed to $hostname_laptop."
+  log_info "Changing hostname for laptop..."
+  if log_cmd "hostnamectl set-hostname \"$hostname_laptop\""; then
+    log_info "Hostname changed to $hostname_laptop."
+  else
+    log_error "Failed to change hostname"
+    return 1
+  fi
 }
 
 tlp_setup() {
@@ -132,23 +139,38 @@ EOF
 }
 
 xorg_setup_intel() {
-  echo "Setting up xorg configuration..."
-  cp ./configs/99-touchpad.conf /etc/X11/xorg.conf.d/99-touchpad.conf
-  cp ./configs/20-intel.conf /etc/X11/xorg.conf.d/20-intel.conf
-  echo "Xorg configuration completed."
+  log_info "Setting up xorg configuration..."
+  if ! log_cmd "cp ./configs/99-touchpad.conf /etc/X11/xorg.conf.d/99-touchpad.conf"; then
+    log_error "Failed to copy touchpad configuration"
+    return 1
+  fi
+  if ! log_cmd "cp ./configs/20-intel.conf /etc/X11/xorg.conf.d/20-intel.conf"; then
+    log_error "Failed to copy Intel configuration"
+    return 1
+  fi
+  log_info "Xorg configuration completed."
 }
 
 # Udev rules for brightness control on qtile
 install_qtile_udev_rule() {
-  echo "Setting up udev rule for qtile..."
-  cp ./configs/99-qtile.rules /etc/udev/rules.d/99-qtile.rules
-  echo "Udev rule for qtile setup completed."
+  log_info "Setting up udev rule for qtile..."
+  if ! log_cmd "cp ./configs/99-qtile.rules /etc/udev/rules.d/99-qtile.rules"; then
+    log_error "Failed to copy qtile udev rules"
+    return 1
+  fi
+  log_info "Udev rule for qtile setup completed."
 
   # copy intel_backlight to xorg.conf.d
-  cp ./configs/99-backlight.conf /etc/X11/xorg.conf.d/99-backlight.conf
-  echo "Backlight configuration completed."
+  if ! log_cmd "cp ./configs/99-backlight.conf /etc/X11/xorg.conf.d/99-backlight.conf"; then
+    log_error "Failed to copy backlight configuration"
+    return 1
+  fi
+  log_info "Backlight configuration completed."
 
-  # reaload udev rules
-  udevadm control --reload-rules && sudo udevadm trigger
-  echo "Udev rules reloaded."
+  # reload udev rules
+  if ! log_cmd "udevadm control --reload-rules && sudo udevadm trigger"; then
+    log_error "Failed to reload udev rules"
+    return 1
+  fi
+  log_info "Udev rules reloaded."
 }
