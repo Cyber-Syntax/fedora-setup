@@ -77,6 +77,7 @@ Experimental: Below functions are need to tested with caution.
   -p    Install ProtonVPN repository and enable OpenVPN for SELinux
   -o    Install Ollama with its install.sh script
   -u    Run system updates (autoremove, fwupdmgr commands).
+  -V    Setup virtualization with virt-manager and configure libvirt.
 
 
 Example:
@@ -547,15 +548,15 @@ virt_manager_setup() {
   log_info "Setting up virtualization..."
   
   # Install required packages
-  sudo dnf install @virtualization
-  sudo dnf group install --with-optional virtualization
+  sudo dnf install -y @virtualization
+  sudo dnf group install -y --with-optional virtualization
 
   # Create the libvirt group if it doesn't exist
   if ! getent group libvirt >/dev/null; then
     sudo groupadd -r libvirt
   fi
 
-  # Add group to user
+  # Add user to libvirt group
   sudo usermod -aG libvirt "$USER"
   
   # Enable and start libvirt service
@@ -571,8 +572,8 @@ virt_manager_setup() {
   # enable network ufw 
   sudo ufw allow in on virbr0
   sudo ufw allow out on virbr0
-  
-  log_info "Virtualization setup completed."
+    
+  log_info "Virtualization setup completed. You may need to log out and log back in for group membership changes to take effect."
 }
 
 
@@ -621,9 +622,10 @@ main() {
   vaapi_option=false
   protonvpn_option=false
   update_system_option=false
+  virt_option=false
 
   # Process command-line options.
-  while getopts "abBcdFfghIilLnNopPrstTuUvzqQx" opt; do
+  while getopts "abBcdFfghIilLnNopPrstTuUvVzqQx" opt; do
     case $opt in
     a) all_option=true ;;
     b) brave_option=true ;;
@@ -633,6 +635,7 @@ main() {
     I) install_system_specific_packages_option=true ;;
     s) syncthing_option=true ;;
     d) dnf_speed_option=true ;;
+    V) virt_option=true ;;
     F) flatpak_option=true ;;
     f) config_option=true ;;
     l) librewolf_option=true ;;
@@ -686,7 +689,8 @@ main() {
     [[ "$vaapi_option" == "false" ]] &&
     [[ "$protonvpn_option" == "false" ]] &&
     [[ "$ufw_option" == "false" ]] &&
-    [[ "$update_system_option" == "false" ]]; then
+    [[ "$update_system_option" == "false" ]] &&
+    [[ "$virt_option" == "false" ]]; then
     log_warn "No options specified"
     usage
   fi
@@ -788,6 +792,7 @@ main() {
     if $vaapi_option; then vaapi_setup; fi
     if $protonvpn_option; then install_protonvpn; fi
     if $update_system_option; then system_updates; fi
+    if $virt_option; then virt_manager_setup; fi
   fi
 
   log_info "Script execution completed."
