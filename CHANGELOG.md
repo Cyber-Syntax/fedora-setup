@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 ## v0.2.1-alpha
 ### Changed
   - Add github action for release
-  -
+  - refactor: variable.sh notify
   
 ## v0.2.0-alpha
 ### Changed
