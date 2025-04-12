@@ -36,7 +36,7 @@ install_librewolf() {
       # For tests, just create a simple repo file directly
       log_info "Creating test repo file at ${REPO_DIR}/librewolf.repo"
       mkdir -p "$(dirname "${REPO_DIR}/librewolf.repo")"
-      echo "TEST LIBREWOLF REPO" > "${REPO_DIR}/librewolf.repo"
+      echo "TEST LIBREWOLF REPO" >"${REPO_DIR}/librewolf.repo"
     else
       # In production, use curl and pkexec to download and write to the repo file
       curl -fsSL https://repo.librewolf.net/librewolf.repo | pkexec tee "${REPO_DIR}/librewolf.repo" >/dev/null
@@ -51,7 +51,7 @@ install_librewolf() {
   mkdir -p "$librewolf_dir"
   cp -r "$firefox_profile" "$librewolf_dir"
   log_info "Changing permissions for Librewolf profile..."
-  
+
   # Only use chown if we're not in a test environment or if we're handling it differently
   if [[ -z "${BATS_TEST_TMPDIR:-}" ]]; then
     chown -R "$USER:$USER" "$librewolf_dir/$PROFILE"
@@ -61,7 +61,8 @@ install_librewolf() {
   log_info "Librewolf profile copied."
 
   # Write the Librewolf profile configuration file.
-  local _profile_content=$(cat <<EOF
+  local _profile_content=$(
+    cat <<EOF
 [Profile1]
 Name=Default User
 IsRelative=1
@@ -81,73 +82,66 @@ Default=1
 StartWithLastProfile=1
 Version=2
 EOF
-)
+  )
 
-  echo "$_profile_content" > "$librewolf_profile"
+  echo "$_profile_content" >"$librewolf_profile"
 }
 
 # Function: modify_brave_desktop
 # Purpose: Ensures that the user’s Brave Browser desktop file includes the argument "--password-store=basic".
 modify_brave_desktop() {
   # Use the parameterized user desktop directory.
-  local user_desktop_dir="${USER_DESKTOP_DIR}"
+  local _user_desktop_dir="${USER_DESKTOP_DIR}"
   # Use the parameterized system desktop file.
-  local system_desktop_file="${DESKTOP_SYSTEM_FILE}"
-  local user_desktop_file="$user_desktop_dir/brave-browser.desktop"
+  local _system_desktop_file="${DESKTOP_SYSTEM_FILE}"
+  local _user_desktop_file="$_user_desktop_dir/brave-browser.desktop"
 
   # Create the user desktop applications directory if it does not exist.
-  if [[ ! -d "$user_desktop_dir" ]]; then
-    mkdir -p "$user_desktop_dir" || {
+  if [[ ! -d "$_user_desktop_dir" ]]; then
+    mkdir -p "$_user_desktop_dir" || {
       log_error "Failed to create user applications directory"
       return 1
     }
-  fi
+  fi 
 
   # If the user desktop file does not exist, copy from system desktop file.
-  if [[ ! -f "$user_desktop_file" ]]; then
-    if [[ -f "$system_desktop_file" ]]; then
-      echo "Copying system desktop file to user directory..."
-      sudo cp "$system_desktop_file" "$user_desktop_file" || {
+  if [[ ! -f "$_user_desktop_file" ]]; then
+    if [[ -f "$_system_desktop_file" ]]; then
+      log_info "Copying system desktop file to user directory..."
+      cp "$_system_desktop_file" "$_user_desktop_file" || {
         log_error "Failed to copy desktop file"
         return 1
       }
     else
       log_error "Brave desktop file not found at:"
-      log_error "System: $system_desktop_file"
-      log_error "User: $user_desktop_file"
+      log_error "System: $_system_desktop_file"
+      log_error "User: $_user_desktop_file"
       return 1
     fi
-  fi
-
-  # Create a temporary file to modify the desktop entry safely.
-  local temp_file
-  temp_file=$(mktemp) || {
-    log_error "Failed to create temporary file"
-    return 1
-  }
-  if ! cp "$user_desktop_file" "$temp_file"; then
-    log_error "Failed to copy desktop file to temporary file"
-    return 1
-  fi
+  fi 
 
   # If already modified, skip further changes.
-  if grep -q -- "--password-store=basic" "$temp_file"; then
+  if grep -q -- "--password-store=basic" "$_user_desktop_file"; then
     log_info "Desktop file already modified - no changes needed"
-    rm "$temp_file"
     return 0
   fi
 
-  # Insert the desired argument into the desktop file.
-  sed -i 's|^Exec=/usr/bin/brave-browser-stable|& --password-store=basic|' "$temp_file" || {
-    log_error "Failed to modify desktop file"
-    rm "$temp_file"
-    return 1
+  # Create backup of the original file
+  local _backup_file="${_user_desktop_file}.bak"
+  log_debug "Creating backup at $_backup_file"
+  cp "$_user_desktop_file" "$_backup_file" || {
+    log_warn "Failed to create backup file, but proceeding anyway"
   }
 
-  # Replace the original desktop file while preserving permissions.
-  chmod --reference="$user_desktop_file" "$temp_file"
-  mv "$temp_file" "$user_desktop_file" || {
-    log_error "Failed to update desktop file"
+  # Modify the file directly
+  log_debug "Modifying desktop file to use basic password store"
+  sed -i 's|^Exec=/usr/bin/brave-browser-stable|& --password-store=basic|' "$_user_desktop_file" || {
+    log_error "Failed to modify desktop file"
+    # Restore from backup if sed failed
+    if [[ -f "$_backup_file" ]]; then
+      log_debug "Restoring from backup"
+      cp "$_backup_file" "$_user_desktop_file"
+    fi
     return 1
   }
 

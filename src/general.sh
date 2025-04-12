@@ -80,16 +80,17 @@ grub_timeout() {
 
 sudoers_setup() {
   # 4. Sudoers snippet (common for both systems).
+  local sudoers_file="/etc/sudoers.d/custom-conf"
+
   log_info "Creating/updating sudoers snippet ($sudoers_file)..."
 
-  local sudoers_file="/etc/sudoers.d/custom-conf"
   # dir_sudoers="/etc/sudoers.d/custom-conf"
   # sudoers_file="./configs/custom-conf"
 
   # Using sudo tee to write to sudoers file with proper permissions
   cat <<EOF | sudo tee "$sudoers_file" >/dev/null
 ## Allow borgbackup script to run without password
-developer ALL=(ALL) NOPASSWD: /opt/borg/home-borgbackup.sh
+$USER ALL=(ALL) NOPASSWD: /opt/borg/home-borgbackup.sh
 
 ## Increase timeout on terminal password prompt
 Defaults timestamp_type=global
@@ -139,28 +140,38 @@ switch_ufw_setup() {
   log_info "UFW installation completed."
   log_info "Updating UFW rules..."
 
-  local ufw_commands=(
-    "sudo ufw default deny incoming"
-    "sudo ufw default allow outgoing"
-    "sudo ufw allow from 192.168.1.0/16"
-    "sudo ufw allow ssh"
-  )
+  # Set default policies
+  if ! sudo ufw default deny incoming; then
+    log_error "Failed to set default incoming policy"
+    return 1
+  fi
 
-  for cmd in "${ufw_commands[@]}"; do
-    if ! $cmd; then
-      log_error "Failed to set UFW rule: $cmd"
-      return 1
-    fi
-  done
+  if ! sudo ufw default allow outgoing; then
+    log_error "Failed to set default outgoing policy"
+    return 1
+  fi
+
+  # Allow internal network and SSH
+  if ! sudo ufw allow from 192.168.1.0/16; then
+    log_error "Failed to allow internal network"
+    return 1
+  fi
+
+  if ! sudo ufw allow ssh; then
+    log_error "Failed to allow SSH"
+    return 1
+  fi
 
   log_info "Opening ports for Syncthing..."
 
   if ! sudo ufw allow 22000; then
     log_warn "Failed to open Syncthing TCP port"
+    return 1
   fi
 
   if ! sudo ufw allow 21027/udp; then
     log_warn "Failed to open Syncthing discovery port"
+    return 1
   fi
 
   log_info "Syncthing ports opened. Check UFW status with 'ufw status verbose'"
