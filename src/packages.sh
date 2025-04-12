@@ -91,8 +91,8 @@ FLATPAK_PACKAGES=(
   org.signal.Signal
   io.github.martchus.syncthingtray
   com.tutanota.Tutanota
+  com.zed.Zed # Zed editor
   # Proprietary softwares
   md.obsidian.Obsidian
   com.spotify.Client
-  com.zed.Zed # Zed editor
 )

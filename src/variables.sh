@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-
-
 USER=$(whoami)  # automatically detect current user
 # User-specific variables
 # WARN: Change these variables as needed
