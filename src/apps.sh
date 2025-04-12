@@ -25,6 +25,16 @@ if ! command -v log_info &>/dev/null; then
   log_error() { echo "[ERROR]" "$@" 1>&2; }
 fi
 
+install_lazygit() {
+  echo "Installing Lazygit..."
+  # Check if the repository is already added
+  if [[ ! -f "/etc/yum.repos.d/_copr:copr.fedorainfracloud.org:atim:lazygit.repo" ]]; then
+    dnf copr enable atim/lazygit -y
+  fi
+  dnf install -y lazygit
+  echo "Lazygit installation completed."
+}
+
 # Function: install_librewolf
 # Purpose: Downloads and writes the repository file, installs the package, and copies the Firefox profile.
 install_librewolf() {
