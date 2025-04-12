@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v0.2.3-alpha
+### Changed
+  - feat: use CHANGELOG.md for releases
+
 ## v0.2.2-alpha
 ### Changed
   - fix: create github action release
