@@ -2,7 +2,7 @@ name: autorelease
 
 on:
   push:
-    branches: [ master, main ]  # support both master and main branch names
+    branches: [ main ]  # support both master and main branch names
     tags:
       - 'v*'  # this will trigger on any tag that starts with 'v'
 
