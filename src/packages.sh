@@ -4,7 +4,6 @@
 source src/logging.sh
 
 install_qtile_packages() {
-
   local qtile_packages=(
     feh
     picom

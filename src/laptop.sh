@@ -16,13 +16,16 @@ laptop_hostname_change() {
 }
 
 tlp_setup() {
+  log_info "Setting up TLP for power management..."
+
   # Capture Fedora version once
   local fedora_version
   fedora_version=$(awk '{print $3}' /etc/fedora-release)
-  echo "Detected Fedora version: $fedora_version"
-
+  log_debug "Detected Fedora version: $fedora_version"
+  local tlp_file="./configs/01-mytlp.conf"
+  local dir_tlp="/etc/tlp.d/01-mytlp.conf"
   if ! sudo cp "$tlp_file" "$dir_tlp"; then
-    echo "Error: Failed to copy TLP configuration file" >&2
+    log_error "Failed to copy TLP configuration file"
     return 1
   fi
 
@@ -32,21 +35,23 @@ tlp_setup() {
     shift
     for service in "$@"; do
       if systemctl list-unit-files | grep -q "^$service"; then
-        systemctl "$action" "$service" || echo "Warning: Failed to $action $service" >&2
+        if ! systemctl "$action" "$service"; then
+          log_warn "Failed to $action $service"
+        fi
       else
-        echo "Service $service not found - skipping"
+        log_debug "Service $service not found - skipping"
       fi
     done
   }
 
   # 3. TuneD handling
   if ((fedora_version > 40)); then
-    echo "Handling TuneD for Fedora $fedora_version..."
+    log_info "Handling TuneD for Fedora $fedora_version..."
     handle_services 'disable --now' tuned tuned-ppd
 
     if rpm -q tuned tuned-ppd &>/dev/null; then
       if ! sudo dnf remove -y tuned tuned-ppd; then
-        echo "Error: Failed to remove TuneD packages" >&2
+        log_error "Failed to remove TuneD packages"
         return 1
       fi
     fi
@@ -54,65 +59,92 @@ tlp_setup() {
 
   # 4. power-profile-daemon handling
   if ((fedora_version < 41)); then
-    echo "Handling power-profile-daemon for Fedora $fedora_version..."
+    log_info "Handling power-profile-daemon for Fedora $fedora_version..."
     handle_services 'disable --now' power-profile-daemon
 
     if rpm -q power-profile-daemon &>/dev/null; then
       if ! sudo dnf remove -y power-profile-daemon; then
-        echo "Error: Failed to remove power-profile-daemon" >&2
+        log_error "Failed to remove power-profile-daemon"
         return 1
       fi
     fi
   fi
 
   # 5. Enable TLP services with verification
-  echo "Configuring TLP services..."
+  log_info "Configuring TLP services..."
   for service in tlp tlp-sleep; do
     if [[ -f "/usr/lib/systemd/system/${service}.service" ]]; then
       if ! sudo systemctl enable --now "$service"; then
-        echo "Error: Failed to enable $service" >&2
+        log_error "Failed to enable $service"
         return 1
       fi
     else
-      echo "Warning: $service service not found" >&2
+      log_warn "$service service not found"
     fi
   done
 
   # mask rfkill to be able to handle radios with tlp
-  sudo systemctl mask systemd-rfkill.service
-  sudo systemctl mask systemd-rfkill.socket
+  if ! sudo systemctl mask systemd-rfkill.service; then
+    log_warn "Failed to mask systemd-rfkill.service"
+  fi
+
+  if ! sudo systemctl mask systemd-rfkill.socket; then
+    log_warn "Failed to mask systemd-rfkill.socket"
+  fi
 
   # enable tlp radio device handling
-  sudo tlp-rdw enable
+  if ! sudo tlp-rdw enable; then
+    log_warn "Failed to enable TLP radio device handling"
+  fi
 
-  echo "TLP setup completed successfully."
+  log_info "TLP setup completed successfully."
   return 0
 }
 
 thinkfan_setup() {
-  echo "Copying thinkfan configuration..."
+  log_info "Setting up thinkfan for fan control..."
+
+  local dir_thinkfan="/etc/thinkfan.conf"
+  local thinkfan_file="./configs/thinkfan.conf"
+
   # backup if there is no backup
   if [[ ! -f "/etc/thinkfan.conf.bak" ]]; then
-    sudo cp /etc/thinkfan.conf /etc/thinkfan.conf.bak
+    if ! sudo cp /etc/thinkfan.conf /etc/thinkfan.conf.bak; then
+      log_warn "Failed to create backup of thinkfan configuration"
+    fi
   fi
+  
+
 
   if ! sudo cp "$thinkfan_file" "$dir_thinkfan"; then
-    echo "Error: Failed to copy thinkfan configuration file" >&2
+    log_error "Failed to copy thinkfan configuration file"
     return 1
   fi
 
   # Modprobe thinkpad_acpi
-  echo "options thinkpad_acpi fan_control=1 experimental=1" | sudo tee /etc/modprobe.d/thinkfan.conf
-  modprobe -rv thinkpad_acpi
-  modprobe -v thinkpad_acpi
+  log_debug "Setting thinkpad_acpi module options..."
+  if ! echo "options thinkpad_acpi fan_control=1 experimental=1" | sudo tee /etc/modprobe.d/thinkfan.conf >/dev/null; then
+    log_error "Failed to create thinkpad_acpi options file"
+    return 1
+  fi
 
-  echo "Enabling and starting thinkfan service..."
-  sudo systemctl enable --now thinkfan
-  sudo systemctl enable thinkfan-sleep
-  sudo systemctl enable thinkfan-wakeup
+  if ! modprobe -rv thinkpad_acpi; then
+    log_warn "Failed to remove thinkpad_acpi module"
+  fi
 
-  #thinkfan sleep hack for %100 fan usage on suspend:
+  if ! modprobe -v thinkpad_acpi; then
+    log_warn "Failed to load thinkpad_acpi module"
+  fi
+
+  log_info "Enabling and starting thinkfan services..."
+  sudo systemctl enable --now thinkfan || log_warn "Failed to enable and start thinkfan service"
+  sudo systemctl enable thinkfan-sleep || log_warn "Failed to enable thinkfan-sleep service"
+  sudo systemctl enable thinkfan-wakeup || log_warn "Failed to enable thinkfan-wakeup service"
+
+  # thinkfan sleep hack for 100% fan usage on suspend
   local thinkfan_sleep_hack="/etc/systemd/system/thinkfan-sleep-hack.service"
+  log_debug "Creating thinkfan sleep hack service at $thinkfan_sleep_hack..."
+
   cat <<EOF | sudo tee "$thinkfan_sleep_hack" >/dev/null
 [Unit]
 Description=Set fan to auto so BIOS can shut off fan during S2 sleep
@@ -127,20 +159,34 @@ ExecStart=/usr/bin/bash -c '/usr/bin/echo "level auto" > /proc/acpi/ibm/fan'
 [Install]
 WantedBy=sleep.target
 EOF
-  echo "Enabling thinkfan-sleep-hack service..."
-  sudo systemctl enable thinkfan-sleep-hack
 
-  echo "Thinkfan setup completed."
+  if [ $? -ne 0 ]; then
+    log_error "Failed to create thinkfan-sleep-hack service file"
+    return 1
+  fi
+
+  log_info "Enabling thinkfan-sleep-hack service..."
+  if ! sudo systemctl enable thinkfan-sleep-hack; then
+    log_warn "Failed to enable thinkfan-sleep-hack service"
+  fi
+
+  log_info "Thinkfan setup completed successfully."
 }
 
 xorg_setup_intel() {
   log_info "Setting up xorg configuration..."
+
+  local intel_file="./configs/20-intel.conf"
+  local dir_intel="/etc/X11/xorg.conf.d/20-intel.conf"
 
   # Execute commands directly instead of using log_cmd
   if ! sudo cp "$intel_file" "$dir_intel"; then
     log_error "Failed to copy Intel configuration file"
     return 1
   fi
+  
+  local dir_touchpad="/etc/X11/xorg.conf.d/99-touchpad.conf"
+  local touchpad_file="./configs/99-touchpad.conf"
 
   if ! sudo cp "$touchpad_file" "$dir_touchpad"; then
     log_error "Failed to copy touchpad configuration file"
@@ -153,6 +199,11 @@ xorg_setup_intel() {
 # Udev rules for brightness control on qtile
 install_qtile_udev_rule() {
   log_info "Setting up udev rule for qtile..."
+
+  local dir_qtile_rules="/etc/udev/rules.d/99-qtile.rules"
+  local qtile_rules_file="./configs/99-qtile.rules"
+  local dir_backlight="/etc/X11/xorg.conf.d/99-backlight.conf"
+  local backlight_file="./configs/99-backlight.conf"
 
   # Execute commands directly instead of using log_cmd
   if ! sudo cp "$qtile_rules_file" "$dir_qtile_rules"; then
@@ -183,7 +234,40 @@ touchpad_setup() {
   log_info "Setting up touchpad configuration..."
 
   # Create the touchpad configuration file as user
-  sudo cp "$touchpad_file" "$dir_touchpad"
+  if ! sudo cp "$touchpad_file" "$dir_touchpad"; then
+    log_error "Failed to copy touchpad configuration"
+    return 1
+  fi
 
   log_info "Touchpad configuration completed."
+}
+
+# sshd setup, copy ssh keys to laptop from desktop etc.
+ssh_setup_laptop() {
+  log_info "Setting up SSH for laptop"
+
+  # Enable password authentication to be able to receive keys
+  if ! sudo systemctl enable --now sshd; then
+    log_error "Failed to enable SSH service"
+    return 1
+  fi
+
+  # Write sshd config to allow password authentication
+  #TODO: Add some security here
+  cat <<EOF >/etc/ssh/sshd_config.d/temp_password_auth.conf
+PasswordAuthentication yes
+PermitRootLogin no
+PermitEmptyPasswords yes
+EOF
+  log_info "SSH password authentication enabled for laptop."
+  log_info "Setting up SSH..."
+
+  # TODO: need to create keys but if they are not created yet.
+  # NOTE: desktop sends keys to laptop here
+  if ! ssh-copy-id $USER@$LAPTOP_IP; then
+    log_error "Failed to copy SSH keys to laptop"
+    return 1
+  fi
+
+  log_info "SSH keys copied successfully."
 }

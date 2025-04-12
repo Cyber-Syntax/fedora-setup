@@ -35,6 +35,13 @@ borgbackup_setup() {
   # send sh script to /opt/borg/home-borgbackup.sh
   log_info "Moving borgbackup script to /opt/borg/home-borgbackup.sh..."
 
+  local dir_borg_script="/opt/borg/home-borgbackup.sh"
+  local borg_script_file="./configs/borg/home-borgbackup.sh"
+  local dir_borg_timer="/etc/systemd/system/borgbackup-home.timer"
+  local dir_borg_service="/etc/systemd/system/borgbackup-home.service"
+  local borg_timer_file="./configs/borg/borgbackup-home.timer"
+  local borg_service_file="./configs/borg/borgbackup-home.service"
+
   # check opt/borg directory
   if [ ! -d /opt/borg ]; then
     log_debug "Creating /opt/borg directory..."
@@ -105,16 +112,13 @@ gdm_auto_login() {
   fi
 
   log_debug "Creating GDM configuration at $gdm_custom..."
-  if ! cat <<EOF >"$gdm_custom"; then
+  cat <<EOF | sudo tee "$gdm_custom" >/dev/null
 [daemon]
 WaylandEnable=false
 DefaultSession=qtile.desktop
 AutomaticLoginEnable=True
 AutomaticLogin=$USER
 EOF
-    log_error "Failed to create GDM configuration file"
-    return 1
-  fi
 
   # Verify file was created and has correct content
   if [[ ! -f "$gdm_custom" ]]; then
@@ -151,7 +155,8 @@ zenpower_setup() {
 
   local blacklist_file="/etc/modprobe.d/zenpower.conf"
   log_debug "Creating k10temp blacklist file at $blacklist_file..."
-  if ! echo "blacklist k10temp" >"$blacklist_file"; then
+  echo "blacklist k10temp" | sudo tee "$blacklist_file" >/dev/null
+  if [ $? -ne 0 ]; then
     log_error "Failed to create k10temp blacklist file"
     return 1
   fi
@@ -235,7 +240,8 @@ switch_nvidia_open() {
 
   local nvidia_kmod_macro="/etc/rpm/macros.nvidia-kmod"
   log_debug "Creating NVIDIA kmod macro file..."
-  if ! echo "%_with_kmod_nvidia_open 1" >"$nvidia_kmod_macro"; then
+  echo "%_with_kmod_nvidia_open 1" | sudo tee "$nvidia_kmod_macro" >/dev/null
+  if [ $? -ne 0 ]; then
     log_error "Failed to create NVIDIA kmod macro file"
     return 1
   fi
@@ -311,7 +317,8 @@ vaapi_setup() {
   done
 
   if [[ "$need_append" == "true" ]]; then
-    if ! printf '%s\n' "${env_vars[@]}" >>"$env_file"; then
+    printf '%s\n' "${env_vars[@]}" | sudo tee -a "$env_file" >/dev/null
+    if [ $? -ne 0 ]; then
       log_error "Failed to update environment variables in $env_file"
       return 1
     fi
@@ -377,4 +384,32 @@ remove_gnome() {
   log_info "GNOME desktop environment removed successfully"
   log_debug "NetworkManager is still installed and preserved"
   return 0
+}
+
+#TEST: Both desktop and laptop
+trash_cli_setup() {
+  log_info "Setting up trash-cli service..."
+
+  local dir_trash_cli_service="/etc/systemd/system/trash-cli.service"
+  local dir_trash_cli_timer="/etc/systemd/system/trash-cli.timer"
+  local trash_cli_service_file="./configs/trash-cli/trash-cli.service"
+  local trash_cli_timer_file="./configs/trash-cli/trash-cli.timer"
+  
+  # Create service file
+  if ! sudo cp "$trash_cli_service_file" "$dir_trash_cli_service"; then
+    log_error "Failed to copy trash-cli service file"
+    return 1
+  fi
+
+  # Create timer file
+  if ! sudo cp "$trash_cli_timer_file" "$dir_trash_cli_timer"; then
+    log_error "Failed to copy trash-cli timer file"
+    return 1
+  fi
+
+  log_info "Enabling trash-cli timer..."
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now trash-cli.timer
+
+  log_info "trash-cli service setup completed."
 }

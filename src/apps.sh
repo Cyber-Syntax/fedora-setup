@@ -172,3 +172,78 @@ install_brave() {
   log_info "Modifying Brave Browser desktop file for password-store basic..."
   modify_brave_desktop
 }
+
+# Install vscode
+install_vscode() {
+  log_info "Installing Visual Studio Code..."
+  #FIX: need proper way handle
+  if ! sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc; then
+    log_error "Failed to import Microsoft key"
+    return 1
+  fi
+
+  if ! echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null; then
+    log_error "Failed to create VS Code repository file"
+    return 1
+  fi
+
+  sudo dnf check-update
+  if ! sudo dnf install -y code; then
+    log_error "Failed to install VS Code"
+    return 1
+  fi
+
+  log_info "VS Code installed successfully."
+}
+
+# TEST: Install ProtonVPN repository and enable OpenVPN for SELinux.
+# This function downloads the ProtonVPN repository package and installs it.
+# Then it attempts to enable OpenVPN for SELinux by installing a local policy module.
+install_protonvpn() {
+  log_info "Installing ProtonVPN repository..."
+  # Note: The URL may need to be updated to the latest version.
+
+  # add if repo not exist
+  #FIX: protonvpn.rpm created on the current directory problem
+  if [[ ! -f "/etc/yum.repos.d/protonvpn-stable.repo" ]]; then
+    wget -O protonvpn.rpm "https://repo.protonvpn.com/fedora-$(awk '{print $3}' /etc/fedora-release)-stable/protonvpn-stable-release/protonvpn-stable-release-1.0.2-1.noarch.rpm"
+  fi
+  #FIX: still asking for key
+  #    ProtonVPN Fedora Stable repository                                                                                            100% |  11.1 KiB/s |   3.7 KiB |  00m00s
+  # >>> Librepo error: repomd.xml GPG signature verification error: Signing key not found
+  #  https://repo.protonvpn.com/fedora-41-stable/public_key.asc                                                                    100% |  13.3 KiB/s |   3.6 KiB |  00m00s
+  # Importing OpenPGP key 0x6:
+  #  UserID     : "Proton Technologies AG <opensource@proton.me>"
+  #  Fingerprint: <cleaned_by_me>
+  #  From       : https://repo.protonvpn.com/fedora-41-stable/public_key.asc
+  # Is this ok [y/N]:
+
+  if ! sudo dnf install -y ./protonvpn.rpm; then
+    log_error "Failed to install ProtonVPN repository"
+    return 1
+  fi
+
+  if ! sudo dnf check-update --refresh; then
+    log_warn "Failed to refresh repositories"
+    # Continue anyway, as check-update can return non-zero for updates
+  fi
+
+  if ! sudo dnf install -y proton-vpn-gnome-desktop; then
+    log_error "Failed to install ProtonVPN GNOME desktop integration"
+    return 1
+  fi
+
+  log_info "ProtonVPN installation completed."
+
+  # log_info "Enabling OpenVPN for SELinux..."
+  # #FIXME: sending else in this block
+  # if [[ -f "myopenvpn.pp" ]]; then
+  #   if ! semodule -i myopenvpn.pp; then
+  #     log_error "Failed to install SELinux OpenVPN module"
+  #     return 1
+  #   fi
+  #   log_info "SELinux OpenVPN module installed."
+  # else
+  #   log_warn "Warning: myopenvpn.pp not found. Please provide the SELinux policy module."
+  # fi
+}
