@@ -112,7 +112,7 @@ modify_brave_desktop() {
       log_error "Failed to create user applications directory"
       return 1
     }
-  fi 
+  fi
 
   # If the user desktop file does not exist, copy from system desktop file.
   if [[ ! -f "$_user_desktop_file" ]]; then
@@ -128,7 +128,7 @@ modify_brave_desktop() {
       log_error "User: $_user_desktop_file"
       return 1
     fi
-  fi 
+  fi
 
   # If already modified, skip further changes.
   if grep -q -- "--password-store=basic" "$_user_desktop_file"; then
@@ -205,49 +205,54 @@ install_vscode() {
 # Then it attempts to enable OpenVPN for SELinux by installing a local policy module.
 install_protonvpn() {
   log_info "Installing ProtonVPN repository..."
-  # Note: The URL may need to be updated to the latest version.
 
-  # add if repo not exist
-  #FIX: protonvpn.rpm created on the current directory problem
-  if [[ ! -f "/etc/yum.repos.d/protonvpn-stable.repo" ]]; then
-    wget -O protonvpn.rpm "https://repo.protonvpn.com/fedora-$(awk '{print $3}' /etc/fedora-release)-stable/protonvpn-stable-release/protonvpn-stable-release-1.0.2-1.noarch.rpm"
-  fi
-  #FIX: still asking for key
-  #    ProtonVPN Fedora Stable repository                                                                                            100% |  11.1 KiB/s |   3.7 KiB |  00m00s
-  # >>> Librepo error: repomd.xml GPG signature verification error: Signing key not found
-  #  https://repo.protonvpn.com/fedora-41-stable/public_key.asc                                                                    100% |  13.3 KiB/s |   3.6 KiB |  00m00s
-  # Importing OpenPGP key 0x6:
-  #  UserID     : "Proton Technologies AG <opensource@proton.me>"
-  #  Fingerprint: <cleaned_by_me>
-  #  From       : https://repo.protonvpn.com/fedora-41-stable/public_key.asc
-  # Is this ok [y/N]:
+  local _fedora_version=$(awk '{print $3}' /etc/fedora-release)
+  local _repo_url="https://repo.protonvpn.com/fedora-${_fedora_version}-stable"
+  local _key_url="${_repo_url}/public_key.asc"
+  local _rpm_url="${_repo_url}/protonvpn-stable-release/protonvpn-stable-release-1.0.2-1.noarch.rpm"
 
-  if ! sudo dnf install -y ./protonvpn.rpm; then
-    log_error "Failed to install ProtonVPN repository"
+  # First, pre-import the GPG key to avoid the prompt
+  log_info "Importing ProtonVPN GPG key..."
+  if ! sudo rpm --import "${_key_url}"; then
+    log_error "Failed to import ProtonVPN GPG key"
     return 1
   fi
 
-  if ! sudo dnf check-update --refresh; then
-    log_warn "Failed to refresh repositories"
-    # Continue anyway, as check-update can return non-zero for updates
+  # Download and install the repository package
+  if [[ ! -f "/etc/yum.repos.d/protonvpn-stable.repo" ]]; then
+    log_info "Downloading and installing ProtonVPN repository..."
+    # Using a temporary file in /tmp to avoid cluttering the current directory
+    local _tmp_rpm="/tmp/protonvpn-stable-release.rpm"
+
+    if ! wget -O "${_tmp_rpm}" "${_rpm_url}"; then
+      log_error "Failed to download ProtonVPN repository package"
+      return 1
+    fi
+
+    # Use --setopt=assumeyes=1 to automatically answer "yes" to all prompts
+    if ! sudo dnf install --setopt=assumeyes=1 "${_tmp_rpm}"; then
+      log_error "Failed to install ProtonVPN repository"
+      sudo rm -f "${_tmp_rpm}"
+      return 1
+    fi
+
+    # Clean up the temporary file
+    sudo rm -f "${_tmp_rpm}"
+  else
+    log_info "ProtonVPN repository already installed"
   fi
 
-  if ! sudo dnf install -y proton-vpn-gnome-desktop; then
+  # Refresh repositories with automatic yes
+  log_info "Refreshing package repositories..."
+  sudo dnf check-update --refresh --setopt=assumeyes=1 || true
+
+  # Install the VPN client with automatic yes
+  log_info "Installing ProtonVPN GNOME desktop integration..."
+  if ! sudo dnf install --setopt=assumeyes=1 -y proton-vpn-gnome-desktop; then
     log_error "Failed to install ProtonVPN GNOME desktop integration"
     return 1
   fi
 
-  log_info "ProtonVPN installation completed."
-
-  # log_info "Enabling OpenVPN for SELinux..."
-  # #FIXME: sending else in this block
-  # if [[ -f "myopenvpn.pp" ]]; then
-  #   if ! semodule -i myopenvpn.pp; then
-  #     log_error "Failed to install SELinux OpenVPN module"
-  #     return 1
-  #   fi
-  #   log_info "SELinux OpenVPN module installed."
-  # else
-  #   log_warn "Warning: myopenvpn.pp not found. Please provide the SELinux policy module."
-  # fi
+  log_info "ProtonVPN installation completed successfully"
+  return 0
 }
