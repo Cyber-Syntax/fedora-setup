@@ -22,8 +22,35 @@ tlp_setup() {
   local fedora_version
   fedora_version=$(awk '{print $3}' /etc/fedora-release)
   log_debug "Detected Fedora version: $fedora_version"
+
+  # Make sure tlp is installed, if not install it
+  if ! rpm -q tlp &>/dev/null; then
+    log_info "TLP is not installed. Installing..."
+    if ! sudo dnf install -y tlp; then
+      log_error "Failed to install TLP"
+      return 1
+    fi
+  fi
+
   local tlp_file="./configs/01-mytlp.conf"
   local dir_tlp="/etc/tlp.d/01-mytlp.conf"
+
+  # Create the tlp.d directory if it doesn't exist
+  if [[ ! -d "/etc/tlp.d" ]]; then
+    if ! sudo mkdir -p /etc/tlp.d; then
+      log_error "Failed to create /etc/tlp.d directory"
+      return 1
+    fi
+  fi
+  
+  # Backup if there is no backup
+  if [[ ! -f "/etc/tlp.d/01-mytlp.conf.bak" ]]; then
+    if ! sudo cp /etc/tlp.d/01-mytlp.conf /etc/tlp.d/01-mytlp.conf.bak; then
+      log_warn "Failed to create backup of TLP configuration"
+    fi
+  fi
+
+  # Copy the TLP configuration file
   if ! sudo cp "$tlp_file" "$dir_tlp"; then
     log_error "Failed to copy TLP configuration file"
     return 1
@@ -113,8 +140,6 @@ thinkfan_setup() {
       log_warn "Failed to create backup of thinkfan configuration"
     fi
   fi
-  
-
 
   if ! sudo cp "$thinkfan_file" "$dir_thinkfan"; then
     log_error "Failed to copy thinkfan configuration file"

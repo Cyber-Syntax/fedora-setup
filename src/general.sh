@@ -258,52 +258,114 @@ switch_lightdm() {
 }
 
 lightdm_autologin() {
+  log_info "Setting up LightDM autologin for user $USER..."
+
   local conf_file="/etc/lightdm/lightdm.conf"
-  local tmp_file
-  tmp_file=$(mktemp)
 
-  # Preserve existing content
-  [[ -f "$conf_file" ]] && cat "$conf_file" >"$tmp_file"
-
-  # Add/Update desired section
-  if ! grep -q '^\[Seat:\*\]' "$tmp_file"; then
-    echo -e "\n[Seat:*]" >>"$tmp_file"
+  # Create backup of original file if it exists and no backup exists yet
+  if [[ -f "$conf_file" && ! -f "${conf_file}.bak" ]]; then
+    log_debug "Creating backup of LightDM configuration..."
+    if ! sudo cp "$conf_file" "${conf_file}.bak"; then
+      log_warn "Failed to create backup of LightDM configuration"
+    else
+      log_debug "LightDM configuration backup created at ${conf_file}.bak"
+    fi
   fi
 
-  # Update settings within the section
-  sed -i '/^\[Seat:\*\]/,/^\[/ {
-        /^autologin-user=/d
-        /^autologin-session=/d
-        /^autologin-guest=/d
-        /^autologin-user-timeout=/d
-        /^autologin-in-background=/d
-    }' "$tmp_file"
+  # Read existing content (if any) to preserve settings
+  local existing_content=""
+  if [[ -f "$conf_file" ]]; then
+    existing_content=$(sudo cat "$conf_file" 2>/dev/null)
+  fi
 
-  cat <<EOF >>"$tmp_file"
-autologin-guest=false
-autologin-user=$USER
-autologin-session=$SESSION
-autologin-user-timeout=0
-autologin-in-background=false
-EOF
+  # Check if [Seat:*] section exists
+  local seat_section_exists=false
+  if echo "$existing_content" | grep -q '^\[Seat:\*\]'; then
+    seat_section_exists=true
+    log_debug "Found existing [Seat:*] section in LightDM configuration"
+  fi
 
-  # Install new config
-  install -m 644 -o root -g root "$tmp_file" "$conf_file"
-  rm "$tmp_file"
+  # Prepare new content
+  local new_content=""
+  if $seat_section_exists; then
+    # Replace content within the [Seat:*] section
+    new_content=$(echo "$existing_content" | awk '
+      BEGIN {in_seat = 0}
+      /^\[Seat:\*\]/ {in_seat = 1; print; next}
+      /^\[/ && in_seat {in_seat = 0; print; next}
+      in_seat && /^autologin-/ {next}  # Skip existing autologin settings
+      {print}
+    ')
 
-  #Pam setup needed on lightdm
+    # Find where to insert new settings
+    local insert_point=$(echo "$new_content" | grep -n '^\[Seat:\*\]' | cut -d: -f1)
+    if [[ -n "$insert_point" ]]; then
+      # Add autologin settings after the [Seat:*] line
+      new_content=$(echo "$new_content" | awk -v insert="$insert_point" '
+        NR == insert {
+          print
+          print "autologin-guest=false"
+          print "autologin-user='$USER'"
+          print "autologin-session='$SESSION'"
+          print "autologin-user-timeout=0"
+          print "autologin-in-background=false"
+          next
+        }
+        {print}
+      ')
+    fi
+  else
+    # Create new content with [Seat:*] section
+    new_content="${existing_content}"
+    # Add an empty line if the file doesn't end with one
+    if [[ -n "$new_content" && ! "$new_content" =~ \n$ ]]; then
+      new_content="${new_content}\n"
+    fi
+
+    # Add new section
+    new_content="${new_content}\n[Seat:*]\n"
+    new_content="${new_content}autologin-guest=false\n"
+    new_content="${new_content}autologin-user=$USER\n"
+    new_content="${new_content}autologin-session=$SESSION\n"
+    new_content="${new_content}autologin-user-timeout=0\n"
+    new_content="${new_content}autologin-in-background=false\n"
+  fi
+
+  # Write updated config file using sudo tee
+  log_debug "Writing new LightDM configuration..."
+  if ! echo -e "$new_content" | sudo tee "$conf_file" >/dev/null; then
+    log_error "Failed to write LightDM configuration"
+    return 1
+  fi
+
+  # Set proper file permissions
+  sudo chmod 644 "$conf_file"
+
+  # Setup PAM configuration for LightDM
   local pam_lightdm="/etc/pam.d/lightdm"
-  # make a backup of the original file
-  if [[ ! -f "$pam_lightdm.bak" ]]; then
-    sudo cp "$pam_lightdm" "$pam_lightdm.bak"
-  fi
-  echo "Setting up PAM configuration for LightDM..."
 
-  # Auto login without password for lightdm. This also need group setup
-  # Append the following lines to the file. Do not change other lines. Add the below lines to the end of the file.
-  #TODO: make group setup globally
-  grep -qxF 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' "$pam_lightdm" || echo 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' >>"$pam_lightdm"
-  grep -qxF 'auth        include     system-login' "$pam_lightdm" || echo 'auth        include     system-login' >>"$pam_lightdm"
+  # Make a backup of the original file if it doesn't exist
+  if [[ -f "$pam_lightdm" && ! -f "${pam_lightdm}.bak" ]]; then
+    log_debug "Creating backup of LightDM PAM configuration..."
+    if ! sudo cp "$pam_lightdm" "${pam_lightdm}.bak"; then
+      log_warn "Failed to create backup of LightDM PAM configuration"
+    else
+      log_debug "LightDM PAM configuration backup created at ${pam_lightdm}.bak"
+    fi
+  fi
+
+  log_info "Setting up PAM configuration for LightDM autologin..."
+
+  # Check if the required lines exist, if not add them
+  if ! sudo grep -q 'auth\s\+sufficient\s\+pam_succeed_if.so user ingroup nopasswdlogin' "$pam_lightdm"; then
+    echo 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' | sudo tee -a "$pam_lightdm" >/dev/null
+  fi
+
+  if ! sudo grep -q 'auth\s\+include\s\+system-login' "$pam_lightdm"; then
+    echo 'auth        include     system-login' | sudo tee -a "$pam_lightdm" >/dev/null
+  fi
+
+  log_info "LightDM autologin configuration completed successfully"
 }
 
 setup_files() {
@@ -410,11 +472,11 @@ virt_manager_setup() {
     log_error "Failed to enable and start libvirt service"
     return 1
   fi
-  
+
   # Libvirtd
   local libvirt_file="./configs/libvirt/network.conf"
   local dir_libvirt="/etc/libvirt/network.conf"
-  
+
   # Fix network nat issue, switch iptables
   if ! sudo cp "$libvirt_file" "$dir_libvirt"; then
     log_error "Failed to copy libvirt network configuration"
