@@ -159,10 +159,10 @@ install_system_specific_packages() {
 
 install_core_packages() {
   log_info "Updating repositories..."
-  sudo dnf install -y "${CORE_PACKAGES[@]}" || {
+  if ! sudo dnf install -y "${CORE_PACKAGES[@]}"; then
     log_error "Error: Failed to install core packages." >&2
     return 1
-  }
+  fi
 
   log_info "Core packages installation completed."
 }
@@ -174,10 +174,10 @@ install_flatpak_packages() {
   flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
   # Install flatpak packages as the regular user
-  flatpak install -y flathub "${FLATPAK_PACKAGES[@]}" || {
+  if ! flatpak install -y flathub "${FLATPAK_PACKAGES[@]}"; then
     log_error "Failed to install Flatpak packages."
     return 1
-  }
+  fi
 
   log_info "Flatpak packages installation completed."
 }
@@ -187,16 +187,16 @@ trash_cli_setup() {
   log_info "Setting up trash-cli service..."
 
   # Create service file
-  sudo cp "$trash_cli_service_file" "$dir_trash_cli_service" || {
+  if ! sudo cp "$trash_cli_service_file" "$dir_trash_cli_service"; then
     log_error "Failed to copy trash-cli service file"
     return 1
-  }
+  fi
 
   # Create timer file
-  sudo cp "$trash_cli_timer_file" "$dir_trash_cli_timer" || {
+  if ! sudo cp "$trash_cli_timer_file" "$dir_trash_cli_timer"; then
     log_error "Failed to copy trash-cli timer file"
     return 1
-  }
+  fi
 
   log_info "Enabling trash-cli timer..."
   sudo systemctl daemon-reload
@@ -225,8 +225,8 @@ grub_timeout() {
       sudo sed -i '/^GRUB_CMDLINE_LINUX=/a GRUB_TIMEOUT=0' "$boot_file"
     else
       # Fixed: Using printf with sudo tee to properly handle redirection with elevated privileges
-      #TEST: 
-      printf 'GRUB_TIMEOUT=0\n' | sudo tee -a "$boot_file" >/dev/null
+      #TEST:
+      echo 'GRUB_TIMEOUT=0\n' | sudo tee -a "$boot_file" >/dev/null
     fi
   fi
 
@@ -263,10 +263,10 @@ EOF
 tcp_bbr_setup() {
   # Copy TCP BBR configuration file
   echo "Setting up TCP BBR configuration..."
-  sudo cp "$tcp_bbr_file" "$dir_tcp_bbr" || {
+  if ! sudo cp "$tcp_bbr_file" "$dir_tcp_bbr"; then
     log_error "Failed to copy TCP BBR configuration file"
     return 1
-  }
+  fi
 
   echo "Reloading sysctl settings..."
   sudo sysctl --system
@@ -367,14 +367,30 @@ install_protonvpn() {
   #  From       : https://repo.protonvpn.com/fedora-41-stable/public_key.asc
   # Is this ok [y/N]:
 
-  sudo dnf install -y ./protonvpn.rpm && sudo dnf check-update --refresh
-  sudo dnf install -y proton-vpn-gnome-desktop
+  if ! sudo dnf install -y ./protonvpn.rpm; then
+    echo "Failed to install ProtonVPN repository"
+    return 1
+  fi
+
+  if ! sudo dnf check-update --refresh; then
+    echo "Failed to refresh repositories"
+    # Continue anyway, as check-update can return non-zero for updates
+  fi
+
+  if ! sudo dnf install -y proton-vpn-gnome-desktop; then
+    echo "Failed to install ProtonVPN GNOME desktop integration"
+    return 1
+  fi
+
   echo "ProtonVPN installation completed."
 
   echo "Enabling OpenVPN for SELinux..."
   #FIXME: sending else in this block
   if [[ -f "myopenvpn.pp" ]]; then
-    semodule -i myopenvpn.pp
+    if ! semodule -i myopenvpn.pp; then
+      echo "Failed to install SELinux OpenVPN module"
+      return 1
+    fi
     echo "SELinux OpenVPN module installed."
   else
     echo "Warning: myopenvpn.pp not found. Please provide the SELinux policy module."
@@ -385,7 +401,9 @@ install_protonvpn() {
 system_updates() {
   echo "Running system updates..."
   for attempt in {1..3}; do
-    sudo dnf autoremove -y && break
+    if sudo dnf autoremove -y; then
+      break
+    fi
     echo "Autoremove failed (attempt $attempt/3), retrying..."
     sleep $((attempt * 5))
   done || {
@@ -406,8 +424,7 @@ syncthing_setup() {
   log_info "Setting up Syncthing..."
 
   # For user-specific services, don't use sudo
-  systemctl --user enable --now syncthing
-  if [ $? -ne 0 ]; then
+  if ! systemctl --user enable --now syncthing; then
     log_error "Failed to enable Syncthing service"
     return 1
   fi
@@ -420,19 +437,16 @@ switch_lightdm() {
   log_info "Switching display manager to LightDM..."
 
   # Execute commands directly instead of using log_cmd
-  sudo dnf install -y lightdm
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf install -y lightdm; then
     log_error "Failed to install LightDM"
     return 1
   fi
 
-  sudo systemctl disable gdm
-  if [ $? -ne 0 ]; then
+  if ! sudo systemctl disable gdm; then
     log_warn "Failed to disable GDM, it might not be installed"
   fi
 
-  sudo systemctl enable lightdm
-  if [ $? -ne 0 ]; then
+  if ! sudo systemctl enable lightdm; then
     log_error "Failed to enable LightDM"
     return 1
   fi
@@ -476,8 +490,7 @@ selinux_context() {
   log_info "Restoring SELinux context for home directory..."
 
   # Execute command directly instead of using log_cmd
-  restorecon -R /home/
-  if [ $? -ne 0 ]; then
+  if ! restorecon -R /home/; then
     log_error "Failed to restore SELinux context for /home/"
     return 1
   fi
@@ -490,8 +503,7 @@ ssh_setup_laptop() {
   log_info "Setting up SSH for laptop"
 
   # Enable password authentication to be able to receive keys
-  sudo systemctl enable --now sshd
-  if [ $? -ne 0 ]; then
+  if ! sudo systemctl enable --now sshd; then
     log_error "Failed to enable SSH service"
     return 1
   fi
@@ -508,8 +520,7 @@ EOF
 
   # TODO: need to create keys but if they are not created yet.
   # NOTE: desktop sends keys to laptop here
-  ssh-copy-id $USER@$LAPTOP_IP
-  if [ $? -ne 0 ]; then
+  if ! ssh-copy-id $USER@$LAPTOP_IP; then
     log_error "Failed to copy SSH keys to laptop"
     return 1
   fi
@@ -521,21 +532,18 @@ EOF
 install_vscode() {
   log_info "Installing Visual Studio Code..."
   #FIX: need proper way handle
-  sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
-  if [ $? -ne 0 ]; then
+  if ! sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc; then
     log_error "Failed to import Microsoft key"
     return 1
   fi
 
-  echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null
-  if [ $? -ne 0 ]; then
+  if ! echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null; then
     log_error "Failed to create VS Code repository file"
     return 1
   fi
 
   sudo dnf check-update
-  sudo dnf install -y code
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf install -y code; then
     log_error "Failed to install VS Code"
     return 1
   fi
@@ -562,8 +570,7 @@ virt_manager_setup() {
   sudo usermod -aG libvirt "$USER"
 
   # Enable and start libvirt service
-  sudo systemctl enable --now libvirtd
-  if [ $? -ne 0 ]; then
+  if ! sudo systemctl enable --now libvirtd; then
     log_error "Failed to enable and start libvirt service"
     return 1
   fi

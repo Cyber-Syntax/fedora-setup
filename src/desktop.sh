@@ -15,20 +15,17 @@ install_ollama() {
 
   log_debug "Downloading and running Ollama install script..."
   # Execute curl command directly instead of passing it to log_cmd with pipes
-  curl -fsSL https://ollama.com/install.sh | sed 's/--add-repo/addrepo/' | sh
-  local _result=$?
-  
-  if [ $_result -eq 0 ]; then
-    # Verify installation
-    if command -v ollama &>/dev/null; then
-      log_info "Ollama installation completed successfully"
-      return 0
-    else
-      log_error "Ollama binary not found after installation"
-      return 1
-    fi
-  else
+  if ! curl -fsSL https://ollama.com/install.sh | sed 's/--add-repo/addrepo/' | sh; then
     log_error "Failed to install Ollama"
+    return 1
+  fi
+
+  # Verify installation
+  if command -v ollama &>/dev/null; then
+    log_info "Ollama installation completed successfully"
+    return 0
+  else
+    log_error "Ollama binary not found after installation"
     return 1
   fi
 }
@@ -46,8 +43,7 @@ borgbackup_setup() {
   # copy script to /opt/borg
   if [ ! -f /opt/borg/home-borgbackup.sh ]; then
     log_debug "Copying home-borgbackup.sh to /opt/borg..."
-    sudo cp "$borg_script_file" "$dir_borg_script"
-    if [ $? -ne 0 ]; then
+    if ! sudo cp "$borg_script_file" "$dir_borg_script"; then
       log_error "Failed to copy home-borgbackup.sh to /opt/borg"
       return 1
     fi
@@ -58,8 +54,7 @@ borgbackup_setup() {
   # check if borgbackup is installed
   if ! command -v borg &>/dev/null; then
     log_debug "Borgbackup is not installed, installing..."
-    sudo dnf install -y borgbackup
-    if [ $? -ne 0 ]; then
+    if ! sudo dnf install -y borgbackup; then
       log_error "Failed to install Borgbackup"
       return 1
     fi
@@ -68,27 +63,26 @@ borgbackup_setup() {
   fi
 
   # cp timer, service
-  sudo cp "$borg_service_file" "$dir_borg_service"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$borg_service_file" "$dir_borg_service"; then
     log_error "Failed to copy borgbackup service file"
     return 1
   fi
-  sudo cp "$borg_timer_file" "$dir_borg_timer"
-  if [ $? -ne 0 ]; then
+
+  if ! sudo cp "$borg_timer_file" "$dir_borg_timer"; then
     log_error "Failed to copy borgbackup timer file"
     return 1
   fi
+
   # enable and start timer
   log_debug "Enabling and starting borgbackup timer..."
-  sudo systemctl enable --now borgbackup.timer
-  if [ $? -ne 0 ]; then
+  if ! sudo systemctl enable --now borgbackup.timer; then
     log_error "Failed to enable and start borgbackup timer"
     return 1
   fi
+
   # end if everything is ok
   log_info "Borgbackup setup completed successfully"
   log_debug "Borgbackup timer is enabled and started"
-  
 }
 
 # Autologin for gdm
@@ -144,23 +138,20 @@ zenpower_setup() {
   fi
 
   log_debug "Enabling zenpower3 COPR repository..."
-  sudo dnf copr enable shdwchn10/zenpower3 -y
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf copr enable shdwchn10/zenpower3 -y; then
     log_error "Failed to enable zenpower3 COPR repository"
     return 1
   fi
 
   log_debug "Installing zenpower3 and zenmonitor3..."
-  sudo dnf install -y zenpower3 zenmonitor3
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf install -y zenpower3 zenmonitor3; then
     log_error "Failed to install zenpower packages"
     return 1
   fi
 
   local blacklist_file="/etc/modprobe.d/zenpower.conf"
   log_debug "Creating k10temp blacklist file at $blacklist_file..."
-  echo "blacklist k10temp" >"$blacklist_file"
-  if [ $? -ne 0 ]; then
+  if ! echo "blacklist k10temp" >"$blacklist_file"; then
     log_error "Failed to create k10temp blacklist file"
     return 1
   fi
@@ -186,36 +177,31 @@ nvidia_cuda_setup() {
   cuda_repo="https://developer.download.nvidia.com/compute/cuda/repos/fedora41/${arch}/cuda-fedora41.repo"
 
   log_debug "Adding CUDA repository..."
-  sudo dnf config-manager addrepo --from-repofile="$cuda_repo"
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf config-manager addrepo --from-repofile="$cuda_repo"; then
     log_error "Failed to add CUDA repository"
     return 1
   fi
 
   log_debug "Cleaning DNF cache..."
-  sudo dnf clean all
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf clean all; then
     log_error "Failed to clean DNF cache"
     return 1
   fi
 
   log_debug "Disabling nvidia-driver module..."
-  sudo dnf module disable -y nvidia-driver
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf module disable -y nvidia-driver; then
     log_warn "Failed to disable nvidia-driver module - this might be normal on Fedora 41"
   fi
 
   log_debug "Setting package exclusions..."
   local exclude_pkgs="nvidia-driver,nvidia-modprobe,nvidia-persistenced,nvidia-settings,nvidia-libXNVCtrl,nvidia-xconfig"
-  sudo dnf config-manager setopt "cuda-fedora41-${arch}.exclude=${exclude_pkgs}"
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf config-manager setopt "cuda-fedora41-${arch}.exclude=${exclude_pkgs}"; then
     log_error "Failed to set package exclusions"
     return 1
   fi
 
   log_debug "Installing CUDA toolkit..."
-  sudo dnf -y install cuda-toolkit
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf -y install cuda-toolkit; then
     log_error "Failed to install CUDA toolkit"
     return 1
   fi
@@ -249,8 +235,7 @@ switch_nvidia_open() {
 
   local nvidia_kmod_macro="/etc/rpm/macros.nvidia-kmod"
   log_debug "Creating NVIDIA kmod macro file..."
-  echo "%_with_kmod_nvidia_open 1" >"$nvidia_kmod_macro"
-  if [ $? -ne 0 ]; then
+  if ! echo "%_with_kmod_nvidia_open 1" >"$nvidia_kmod_macro"; then
     log_error "Failed to create NVIDIA kmod macro file"
     return 1
   fi
@@ -258,19 +243,16 @@ switch_nvidia_open() {
   local current_kernel
   current_kernel=$(uname -r)
   log_debug "Rebuilding NVIDIA modules for kernel $current_kernel..."
-  akmods --kernels "$current_kernel" --rebuild
-  if [ $? -ne 0 ]; then
+  if ! akmods --kernels "$current_kernel" --rebuild; then
     log_warn "Initial rebuild failed, attempting with --force..."
-    akmods --kernels "$current_kernel" --rebuild --force
-    if [ $? -ne 0 ]; then
+    if ! akmods --kernels "$current_kernel" --rebuild --force; then
       log_error "Failed to rebuild NVIDIA modules"
       return 1
     fi
   fi
 
   log_debug "Disabling RPMFusion non-free NVIDIA driver repository..."
-  sudo dnf --disablerepo rpmfusion-nonfree-nvidia-driver
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf --disablerepo rpmfusion-nonfree-nvidia-driver; then
     log_error "Failed to disable RPMFusion non-free NVIDIA driver repository"
     return 1
   fi
@@ -305,8 +287,7 @@ vaapi_setup() {
     "gstreamer1-plugins-bad-free-devel"
   )
 
-  sudo dnf install -y "${packages[@]}"
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf install -y "${packages[@]}"; then
     log_error "Failed to install VA-API packages"
     return 1
   fi
@@ -330,8 +311,7 @@ vaapi_setup() {
   done
 
   if [[ "$need_append" == "true" ]]; then
-    printf '%s\n' "${env_vars[@]}" >>"$env_file"
-    if [ $? -ne 0 ]; then
+    if ! printf '%s\n' "${env_vars[@]}" >>"$env_file"; then
       log_error "Failed to update environment variables in $env_file"
       return 1
     fi
@@ -382,8 +362,7 @@ remove_gnome() {
   fi
 
   log_debug "Removing GNOME packages..."
-  sudo dnf remove -y "${gnome_packages[@]}"
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf remove -y "${gnome_packages[@]}"; then
     log_error "Failed to remove GNOME packages"
     return 1
   fi

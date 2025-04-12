@@ -5,15 +5,14 @@ source src/variables.sh
 
 laptop_hostname_change() {
   log_info "Changing hostname for laptop..."
-  
+
   # Execute command directly instead of using log_cmd
-  hostnamectl set-hostname "$hostname_laptop"
-  if [ $? -eq 0 ]; then
-    log_info "Hostname changed to $hostname_laptop."
-  else
+  if ! hostnamectl set-hostname "$hostname_laptop"; then
     log_error "Failed to change hostname"
     return 1
   fi
+
+  log_info "Hostname changed to $hostname_laptop."
 }
 
 tlp_setup() {
@@ -22,12 +21,10 @@ tlp_setup() {
   fedora_version=$(awk '{print $3}' /etc/fedora-release)
   echo "Detected Fedora version: $fedora_version"
 
-  sudo cp "$tlp_file" "$dir_tlp"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$tlp_file" "$dir_tlp"; then
     echo "Error: Failed to copy TLP configuration file" >&2
     return 1
   fi
-
 
   # 2. Service management with existence checks
   handle_services() {
@@ -48,10 +45,10 @@ tlp_setup() {
     handle_services 'disable --now' tuned tuned-ppd
 
     if rpm -q tuned tuned-ppd &>/dev/null; then
-      sudo dnf remove -y tuned tuned-ppd || {
+      if ! sudo dnf remove -y tuned tuned-ppd; then
         echo "Error: Failed to remove TuneD packages" >&2
         return 1
-      }
+      fi
     fi
   fi
 
@@ -61,10 +58,10 @@ tlp_setup() {
     handle_services 'disable --now' power-profile-daemon
 
     if rpm -q power-profile-daemon &>/dev/null; then
-      sudo dnf remove -y power-profile-daemon || {
+      if ! sudo dnf remove -y power-profile-daemon; then
         echo "Error: Failed to remove power-profile-daemon" >&2
         return 1
-      }
+      fi
     fi
   fi
 
@@ -72,10 +69,10 @@ tlp_setup() {
   echo "Configuring TLP services..."
   for service in tlp tlp-sleep; do
     if [[ -f "/usr/lib/systemd/system/${service}.service" ]]; then
-      sudo systemctl enable --now "$service" || {
+      if ! sudo systemctl enable --now "$service"; then
         echo "Error: Failed to enable $service" >&2
         return 1
-      }
+      fi
     else
       echo "Warning: $service service not found" >&2
     fi
@@ -99,8 +96,7 @@ thinkfan_setup() {
     sudo cp /etc/thinkfan.conf /etc/thinkfan.conf.bak
   fi
 
-  sudo cp "$thinkfan_file" "$dir_thinkfan"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$thinkfan_file" "$dir_thinkfan"; then
     echo "Error: Failed to copy thinkfan configuration file" >&2
     return 1
   fi
@@ -139,61 +135,55 @@ EOF
 
 xorg_setup_intel() {
   log_info "Setting up xorg configuration..."
-  
+
   # Execute commands directly instead of using log_cmd
-  sudo cp "$intel_file" "$dir_intel"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$intel_file" "$dir_intel"; then
     log_error "Failed to copy Intel configuration file"
     return 1
   fi
 
-  sudo cp "$touchpad_file" "$dir_touchpad"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$touchpad_file" "$dir_touchpad"; then
     log_error "Failed to copy touchpad configuration file"
     return 1
   fi
-  
+
   log_info "Xorg configuration completed."
 }
 
 # Udev rules for brightness control on qtile
 install_qtile_udev_rule() {
   log_info "Setting up udev rule for qtile..."
-  
+
   # Execute commands directly instead of using log_cmd
-  sudo cp "$qtile_rules_file" "$dir_qtile_rules"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$qtile_rules_file" "$dir_qtile_rules"; then
     log_error "Failed to copy udev rule for qtile"
     return 1
   fi
-  
+
   log_info "Udev rule for qtile setup completed."
 
   # copy intel_backlight to xorg.conf.d
-  sudo cp "$backlight_file" "$dir_backlight"
-  if [ $? -ne 0 ]; then
+  if ! sudo cp "$backlight_file" "$dir_backlight"; then
     log_error "Failed to copy backlight configuration"
     return 1
   fi
-  
+
   log_info "Backlight configuration completed."
 
   # reload udev rules
-  sudo udevadm control --reload-rules
-  sudo udevadm trigger
-  if [ $? -ne 0 ]; then
+  if ! sudo udevadm control --reload-rules && sudo udevadm trigger; then
     log_error "Failed to reload udev rules"
     return 1
   fi
-  
+
   log_info "Udev rules reloaded."
 }
 
 touchpad_setup() {
   log_info "Setting up touchpad configuration..."
-    
+
   # Create the touchpad configuration file as user
   sudo cp "$touchpad_file" "$dir_touchpad"
-  
+
   log_info "Touchpad configuration completed."
 }

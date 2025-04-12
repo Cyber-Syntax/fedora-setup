@@ -9,13 +9,13 @@ speed_up_dnf() {
   log_info "Configuring DNF for improved performance..."
   # Define the configuration file path
   local _dnf_conf="/etc/dnf/dnf.conf"
-  
+
   # Backup current dnf.conf if no backup exists.
   if [[ ! -f "${_dnf_conf}.bak" ]]; then
-    sudo cp "$_dnf_conf" "${_dnf_conf}.bak" || {
+    if ! sudo cp "$_dnf_conf" "${_dnf_conf}.bak"; then
       log_error "Failed to create backup of $_dnf_conf"
       return 1
-    }
+    fi
   fi
   # 250K = 0.25MB/s
   #TODO: make .conf file and copy
@@ -31,7 +31,10 @@ speed_up_dnf() {
   for setting in "${settings[@]}"; do
     if ! grep -q "^$setting" "$_dnf_conf"; then
       log_debug "Adding setting: $setting"
-      echo "$setting" | sudo tee -a "$_dnf_conf" >/dev/null
+      if ! echo "$setting" | sudo tee -a "$_dnf_conf" >/dev/null; then
+        log_error "Failed to add setting: $setting"
+        return 1
+      fi
     fi
   done
 
@@ -42,14 +45,12 @@ switch_ufw_setup() {
   log_info "Switching to UFW from firewalld..."
 
   # Execute commands directly instead of using log_cmd
-  sudo systemctl disable --now firewalld
-  if [ $? -ne 0 ]; then
+  if ! sudo systemctl disable --now firewalld; then
     log_error "Failed to disable firewalld"
     return 1
   fi
 
-  sudo systemctl enable --now ufw
-  if [ $? -ne 0 ]; then
+  if ! sudo systemctl enable --now ufw; then
     log_error "Failed to enable UFW"
     return 1
   fi
@@ -65,22 +66,19 @@ switch_ufw_setup() {
   )
 
   for cmd in "${ufw_commands[@]}"; do
-    eval "$cmd"
-    if [ $? -ne 0 ]; then
+    if ! eval "$cmd"; then
       log_error "Failed to set UFW rule: $cmd"
       return 1
     fi
   done
 
   log_info "Opening ports for Syncthing..."
-  
-  sudo ufw allow 22000
-  if [ $? -ne 0 ]; then
+
+  if ! sudo ufw allow 22000; then
     log_warn "Failed to open Syncthing TCP port"
   fi
-  
-  sudo ufw allow 21027/udp
-  if [ $? -ne 0 ]; then
+
+  if ! sudo ufw allow 21027/udp; then
     log_warn "Failed to open Syncthing discovery port"
   fi
 
@@ -92,15 +90,13 @@ ffmpeg_swap() {
   log_info "Checking for ffmpeg-free package..."
   if sudo dnf list installed ffmpeg-free &>/dev/null; then
     log_info "Swapping ffmpeg-free with ffmpeg..."
-    
+
     # Execute command directly instead of using log_cmd
-    sudo dnf swap ffmpeg-free ffmpeg --allowerasing -y
-    if [ $? -eq 0 ]; then
-      log_info "ffmpeg swap completed successfully."
-    else
+    if ! sudo dnf swap ffmpeg-free ffmpeg --allowerasing -y; then
       log_error "Failed to swap ffmpeg packages"
       return 1
     fi
+    log_info "ffmpeg swap completed successfully."
   else
     log_info "ffmpeg-free is not installed; skipping swap."
   fi
@@ -127,34 +123,30 @@ enable_rpm_fusion() {
 
   # Otherwise, install the repositories.
   log_info "Installing RPM Fusion repositories..."
-  
+
   # Execute command directly instead of using log_cmd
-  sudo dnf install -y \
+  if ! sudo dnf install -y \
     https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${fedora_version}.noarch.rpm \
-    https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${fedora_version}.noarch.rpm
-  if [ $? -ne 0 ]; then
+    https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${fedora_version}.noarch.rpm; then
     log_error "Failed to install RPM Fusion repositories"
     return 1
   fi
 
   log_info "Upgrading system packages..."
-  
+
   # Execute commands directly instead of using log_cmd
-  sudo dnf upgrade --refresh -y
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf upgrade --refresh -y; then
     log_warn "System upgrade failed"
   fi
-  
-  sudo dnf group upgrade -y core
-  if [ $? -ne 0 ]; then
+
+  if ! sudo dnf group upgrade -y core; then
     log_warn "Core group upgrade failed"
   fi
 
   log_info "Installing additional RPM Fusion components..."
-  
+
   # Execute command directly instead of using log_cmd
-  sudo dnf install -y rpmfusion-free-release-tainted rpmfusion-nonfree-release-tainted sudo dnf-plugins-core
-  if [ $? -ne 0 ]; then
+  if ! sudo dnf install -y rpmfusion-free-release-tainted rpmfusion-nonfree-release-tainted sudo dnf-plugins-core; then
     log_error "Failed to install RPM Fusion tainted repositories"
     return 1
   fi
