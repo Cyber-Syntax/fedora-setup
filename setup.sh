@@ -112,82 +112,39 @@ detect_system_type() {
   echo "$detected_type"
 }
 
-# Define option categories - this helps organize related flags
-declare -A _OPTION_CATEGORIES=(
-  ["install_packages"]="install_core_packages_option install_app_packages_option install_dev_packages_option install_system_specific_packages_option"
-  ["browser"]="librewolf_option brave_option"
-  ["desktop_env"]="qtile_option qtile_udev_option"
-  ["system_tools"]="trash_cli_option tlp_option thinkfan_option syncthing_option borgbackup_option"
-  ["services"]="ufw_option zenpower_option"
-  ["gpu"]="nvidia_cuda_option switch_nvidia_open_option vaapi_option"
-  ["utilities"]="flatpak_option dnf_speed_option swap_ffmpeg_option config_option lazygit_option"
-  ["experimental"]="remove_gnome_option virt_option protonvpn_option update_system_option ollama_option"
-)
-
-# Check if any options in a category are enabled
-any_option_enabled() {
-  local category="$1"
-  local options=${_OPTION_CATEGORIES[$category]}
-
-  for opt in $options; do
-    if [[ "${!opt}" == "true" ]]; then
-      return 0 # true
-    fi
-  done
-  return 1 # false
-}
-
-# Check if any DNF options are enabled
+# Check if any options that use DNF installation are enabled
 needs_dnf_speedup() {
-  # Core installation options
+  # Return true if any of these options are enabled
   if $all_option ||
-    any_option_enabled "install_packages" ||
-    any_option_enabled "browser" ||
-    any_option_enabled "desktop_env" ||
-    any_option_enabled "system_tools" ||
-    any_option_enabled "gpu" ||
+    $install_core_packages_option ||
+    $install_system_specific_packages_option ||
+    $install_app_packages_option ||
+    $install_dev_packages_option ||
+    $librewolf_option ||
+    $qtile_option ||
+    $brave_option ||
     $rpm_option ||
-    $ollama_option ||
+    $tlp_option ||
+    $nvidia_cuda_option ||
+    $switch_nvidia_open_option ||
+    $virt_option ||
     $ufw_option ||
-    $virt_option; then
+    $trash_cli_option ||
+    $borgbackup_option ||
+    $zenpower_option ||
+    $vaapi_option ||
+    $swap_ffmpeg_option ||
+    $protonvpn_option ||
+    $ollama_option; then
     return 0 # true in bash
   fi
   return 1 # false in bash
 }
 
-# Check if core packages are needed
-needs_core_packages() {
-  # Core dependencies check
-  if $all_option ||
-    $qtile_option ||
-    $trash_cli_option ||
-    $borgbackup_option ||
-    $syncthing_option ||
-    $ufw_option ||
-    $lazygit_option; then
-    return 0 # true
-  fi
-  return 1 # false
-}
-
-# Check if system specific packages are needed
-needs_system_specific_packages() {
-  # System-specific dependency check
-  if $tlp_option ||
-    $thinkfan_option ||
-    $install_system_specific_packages_option ||
-    $nvidia_cuda_option ||
-    $switch_nvidia_open_option ||
-    $vaapi_option ||
-    $borgbackup_option; then
-    return 0 # true
-  fi
-  return 1 # false
-}
-
 # Install system-specific packages
 install_system_specific_packages() {
   local system_type
+  system_type=$(detect_system_type)
   system_type=$(detect_system_type)
   # local system_type="${1:-unknown}"
   local pkg_list=()
@@ -391,29 +348,38 @@ main() {
   done
 
   # If no optional flags were provided, show usage and exit.
-  # First create an array of all options
-  local all_options=(
-    "$all_option" "$install_core_packages_option" "$install_system_specific_packages_option"
-    "$install_app_packages_option" "$install_dev_packages_option" "$flatpak_option"
-    "$borgbackup_option" "$touchpad_option" "$trash_cli_option" "$tlp_option"
-    "$thinkfan_option" "$syncthing_option" "$librewolf_option" "$qtile_option"
-    "$qtile_udev_option" "$brave_option" "$rpm_option" "$dnf_speed_option"
-    "$swap_ffmpeg_option" "$config_option" "$lazygit_option" "$ollama_option"
-    "$remove_gnome_option" "$zenpower_option" "$nvidia_cuda_option" "$switch_nvidia_open_option"
-    "$vaapi_option" "$protonvpn_option" "$ufw_option" "$update_system_option" "$virt_option"
-  )
-
-  # Check if any option is enabled
-  local any_option_enabled=false
-  for opt in "${all_options[@]}"; do
-    if [[ "$opt" == "true" ]]; then
-      any_option_enabled=true
-      break
-    fi
-  done
-
-  if [[ "$any_option_enabled" == "false" ]]; then
-    log_info "No options specified showing usage."
+  if [[ "$all_option" == "false" ]] &&
+    [[ "$install_core_packages_option" == "false" ]] &&
+    [[ "$install_system_specific_packages_option" == "false" ]] &&
+    [[ "$install_app_packages_option" == "false" ]] &&
+    [[ "$install_dev_packages_option" == "false" ]] &&
+    [[ "$flatpak_option" == "false" ]] &&
+    [[ "$borgbackup_option" == "false" ]] &&
+    [[ "$touchpad_option" == "false" ]] &&
+    [[ "$trash_cli_option" == "false" ]] &&
+    [[ "$tlp_option" == "false" ]] &&
+    [[ "$thinkfan_option" == "false" ]] &&
+    [[ "$syncthing_option" == "false" ]] &&
+    [[ "$librewolf_option" == "false" ]] &&
+    [[ "$qtile_option" == "false" ]] &&
+    [[ "$qtile_udev_option" == "false" ]] &&
+    [[ "$brave_option" == "false" ]] &&
+    [[ "$rpm_option" == "false" ]] &&
+    [[ "$dnf_speed_option" == "false" ]] &&
+    [[ "$swap_ffmpeg_option" == "false" ]] &&
+    [[ "$config_option" == "false" ]] &&
+    [[ "$lazygit_option" == "false" ]] &&
+    [[ "$ollama_option" == "false" ]] &&
+    [[ "$remove_gnome_option" == "false" ]] &&
+    [[ "$zenpower_option" == "false" ]] &&
+    [[ "$nvidia_cuda_option" == "false" ]] &&
+    [[ "$switch_nvidia_open_option" == "false" ]] &&
+    [[ "$vaapi_option" == "false" ]] &&
+    [[ "$protonvpn_option" == "false" ]] &&
+    [[ "$ufw_option" == "false" ]] &&
+    [[ "$update_system_option" == "false" ]] &&
+    [[ "$virt_option" == "false" ]]; then
+    log_warn "No options specified"
     usage
   fi
 
@@ -421,7 +387,8 @@ main() {
   log_info "Detected system type: $system_type"
 
   local need_core_packages=false
-  if needs_core_packages; then
+  #TESTING: new options lazygit,ufw and add more if needed
+  if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option || $syncthing_option || $ufw_option || $lazygit_option || $virt_option; then
     need_core_packages=true
     log_debug "Core packages are needed due to selected options"
   fi
@@ -437,8 +404,12 @@ main() {
     install_core_packages
   fi
 
-  # If system-specific packages are needed, install them
-  if needs_system_specific_packages; then
+  # If laptop or desktop option is selected, install system-specific packages.
+  if $tlp_option || $thinkfan_option || $install_system_specific_packages_option; then
+    install_system_specific_packages "$system_type"
+  fi
+
+  if $nvidia_cuda_option || $switch_nvidia_open_option || $vaapi_option || $borgbackup_option; then
     install_system_specific_packages "$system_type"
   fi
 
@@ -492,49 +463,35 @@ main() {
 
   else
     log_info "Executing selected additional functions..."
-
-    # Use arrays to group related options for better readability
-
-    # System configuration options
     if $ufw_option; then switch_ufw_setup; fi
-    if $config_option; then setup_files "$system_type"; fi
-    if $dnf_speed_option; then speed_up_dnf; fi
-    if $update_system_option; then system_updates; fi
-
-    # Package installations
+    if $lazygit_option; then install_lazygit; fi
     if $install_core_packages_option; then install_core_packages; fi
     if $install_app_packages_option; then install_app_packages; fi
     if $install_dev_packages_option; then install_dev_packages; fi
     if $install_system_specific_packages_option; then install_system_specific_packages "$system_type"; fi
+    if $touchpad_option; then touchpad_setup; fi
     if $flatpak_option; then install_flatpak_packages; fi
-    if $rpm_option; then enable_rpm_fusion; fi
-
-    # Browser options
     if $librewolf_option; then install_librewolf; fi
-    if $brave_option; then install_brave; fi
-
-    # Desktop environment and utilities
     if $qtile_option; then install_qtile_packages; fi
     if $qtile_udev_option; then install_qtile_udev_rule; fi
-    if $touchpad_option; then touchpad_setup; fi
-    if $swap_ffmpeg_option; then ffmpeg_swap; fi
-    if $lazygit_option; then install_lazygit; fi
-
-    # System services
+    if $brave_option; then install_brave; fi
+    if $rpm_option; then enable_rpm_fusion; fi
     if $trash_cli_option; then trash_cli_setup; fi
     if $tlp_option; then tlp_setup; fi
     if $thinkfan_option; then thinkfan_setup; fi
     if $syncthing_option; then syncthing_setup; fi
     if $borgbackup_option; then borgbackup_setup; fi
-
-    # Advanced and experimental features
+    if $dnf_speed_option; then speed_up_dnf; fi
+    if $swap_ffmpeg_option; then ffmpeg_swap; fi
+    if $ollama_option; then install_ollama; fi
+    if $config_option; then setup_files "$system_type"; fi
     if $remove_gnome_option; then remove_gnome; fi
     if $zenpower_option; then zenpower_setup; fi
     if $nvidia_cuda_option; then nvidia_cuda_setup; fi
     if $switch_nvidia_open_option; then switch_nvidia_open; fi
     if $vaapi_option; then vaapi_setup; fi
     if $protonvpn_option; then install_protonvpn; fi
-    if $ollama_option; then install_ollama; fi
+    if $update_system_option; then system_updates; fi
     if $virt_option; then virt_manager_setup; fi
   fi
 
