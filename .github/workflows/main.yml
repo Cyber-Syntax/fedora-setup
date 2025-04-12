@@ -1,27 +1,26 @@
-name: autorelease
+# This is a basic workflow to help you get started with the GitHub Auto-Release on Commit Action.
+
+name: AutoRelease
 
 on:
   push:
-    branches: [ main ]  # support both master and main branch names
-    tags:
-      - 'v*'  # this will trigger on any tag that starts with 'v'
+    branches: [ main ]
 
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  # This workflow contains a single job called "build"
   release:
+    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - uses: actions/checkout@v3  # updated to newer version
+      - uses: actions/checkout@v2
+      - uses: CupOfTea696/gh-action-auto-release@v1.0.2
         with:
-          fetch-depth: 0  # this ensures all tags and history are available
-      
-      - name: create release
-        uses: cupoftea696/gh-action-auto-release@v1.0.2  # updated to newer version
-        with:
-          title: "release: $version"
+          title: "Release: $version"
           tag: "v$semver"
           draft: false
-          regex: "/^release: v?#{semver}$/i"  # more flexible regex pattern
-          prereleaseregex: "/^release: v?#{semver}-.*$/i"
+          regex: "/^Release: #{semver}$/i"
         env:
-          github_token: ${{ secrets.github_token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
