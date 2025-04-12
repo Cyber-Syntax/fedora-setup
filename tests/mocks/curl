@@ -1,0 +1,5 @@
+#!/bin/bash
+# Simulate repo file download
+if [[ "$*" == *librewolf.repo* ]]; then
+    echo "TEST LIBREWOLF REPO"
+fi

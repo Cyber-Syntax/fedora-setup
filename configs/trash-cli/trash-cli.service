@@ -1,0 +1,12 @@
+[Unit]
+Description=Trash-cli cleanup service
+After=network.target
+# The network dependency is optional, but good practice if your command relies on network availability.
+
+[Service]
+Type=oneshot
+User=developer
+# Adjust the path if trash-empty is not in /usr/bin. This command removes files older than 30 days.
+ExecStart=/usr/bin/trash-empty 30
+
+# No Restart option here because this is a one-shot service.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily timer for trash-cli cleanup
+
+[Timer]
+# Runs the service daily.
+OnCalendar=daily
+# Persistent makes sure that if the scheduled run was missed, it will run as soon as possible.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,4 @@
+[librewolf]
+name=LibreWolf
+baseurl=https://repo.librewolf.net
+enabled=1

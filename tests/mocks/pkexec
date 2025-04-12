@@ -1,0 +1,14 @@
+#!/bin/bash
+# Mock pkexec to avoid needing real permissions
+# Capture the command being executed
+cmd="$@"
+
+# Special handling for tee command used in repo installations
+if [[ "$1" == "tee" ]]; then
+  # Just output the input to the file without needing permissions
+  cat > "$2"
+  exit 0
+fi
+
+# For other commands, just execute them directly
+exec "$@"

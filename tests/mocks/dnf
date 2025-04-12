@@ -1,0 +1,18 @@
+#!/bin/bash
+# Make sure the sudo dnf.log directory exists
+mkdir -p "$(dirname "$BATS_TEST_TMPDIR/sudo dnf.log")"
+
+# Log all sudo dnf commands - ensure the file is created even if empty
+touch "$BATS_TEST_TMPDIR/sudo dnf.log"
+echo "$@" >>"$BATS_TEST_TMPDIR/sudo dnf.log"
+
+# Simulate package installation
+if [[ "$1" == "install" ]]; then
+  # Skip options that start with - to avoid creating files like -y
+  for arg in "$@"; do
+    if [[ "$arg" != -* && "$arg" != "install" ]]; then
+      # Only create fake installed package files for actual package names
+      touch "${MOCK_ROOT}/usr/bin/$(basename "$arg")"
+    fi
+  done
+fi

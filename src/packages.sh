@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+# Source the logging module
+source src/logging.sh
+
 install_qtile_packages() {
-  echo "Installing Qtile packages..."
   local qtile_packages=(
     feh
     picom
@@ -17,62 +19,68 @@ install_qtile_packages() {
     xev # X event viewer
   )
   # one line install
-  dnf install -y "${qtile_packages[@]}" || {
-    echo "Error: Failed to install Qtile packages." >&2
+  sudo dnf install -y "${qtile_packages[@]}" || {
+    log_error "Failed to install Qtile packages."
     return 1
   }
 
-  echo "Qtile packages installation completed."
 }
 
 CORE_PACKAGES=(
-  zsh-autosuggestions
-  zsh-syntax-highlighting
-  zsh
-  vim
+  curl
+  wget
   ufw
-  zoxide
-  eza
-  fd-find
   trash-cli
+  syncthing
+  borgbackup
+  flatpak
+)
+
+APPS_PACKAGES=(
+  seahorse
+  xournalpp
+  kitty
+  keepassxc
+  neovim
+  vim
+  pavucontrol
+)
+
+DEV_PACKAGES=(
+  gh
+  ruff
   lm_sensors
   htop
   btop
   pip
-  keepassxc
-  neovim
-  vim
-  syncthing
-  borgbackup
-  seahorse
-  xournalpp
-  kitty
-  ruff
-  flatpak
-  bat
-  git
-  gh
+  zoxide
   fzf
-  pavucontrol
+  bat
+  eza
+  fd-find
+  zsh-autosuggestions
+  zsh-syntax-highlighting
+  zsh
   luarocks
   cargo
   yarnpkg
   bash-language-server
   python3-devel
   dbus-devel
+  shfmt
+  ShellCheck
 )
 
 DESKTOP_PACKAGES=(
   virt-manager # Virtualization manager
   libvirt      # Virtualization toolkit
   nvidia-open
-  # gdm # Display manager; adjust if switching
   lightdm
   sysbench
 )
 
 LAPTOP_PACKAGES=(
-  # cbatticon # not on dnf
+  # cbatticon # not on sudo dnf
   powertop # Power management
   tlp      # Power management
   tlp-rdw
