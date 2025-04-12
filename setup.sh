@@ -110,6 +110,33 @@ detect_system_type() {
   echo "$detected_type"
 }
 
+# Check if any options that use DNF installation are enabled
+needs_dnf_speedup() {
+  # Return true if any of these options are enabled
+  if $all_option ||
+    $install_core_packages_option ||
+    $install_system_specific_packages_option ||
+    $librewolf_option ||
+    $qtile_option ||
+    $brave_option ||
+    $rpm_option ||
+    $tlp_option ||
+    $nvidia_cuda_option ||
+    $switch_nvidia_open_option ||
+    $virt_option ||
+    $ufw_option ||
+    $trash_cli_option ||
+    $borgbackup_option ||
+    $zenpower_option ||
+    $vaapi_option ||
+    $swap_ffmpeg_option ||
+    $protonvpn_option ||
+    $ollama_option; then
+    return 0 # true in bash
+  fi
+  return 1 # false in bash
+}
+
 # Install system-specific packages
 install_system_specific_packages() {
   local system_type
@@ -119,18 +146,18 @@ install_system_specific_packages() {
   local pkg_list=()
 
   case "$system_type" in
-  desktop)
-    log_info "Installing desktop-specific packages..."
-    pkg_list=("${DESKTOP_PACKAGES[@]}")
-    ;;
-  laptop)
-    log_info "Installing laptop-specific packages..."
-    pkg_list=("${LAPTOP_PACKAGES[@]}")
-    ;;
-  *)
-    log_warn "Unknown system type '$system_type'. Skipping system-specific packages."
-    return 0
-    ;;
+    desktop)
+      log_info "Installing desktop-specific packages..."
+      pkg_list=("${DESKTOP_PACKAGES[@]}")
+      ;;
+    laptop)
+      log_info "Installing laptop-specific packages..."
+      pkg_list=("${LAPTOP_PACKAGES[@]}")
+      ;;
+    *)
+      log_warn "Unknown system type '$system_type'. Skipping system-specific packages."
+      return 0
+      ;;
   esac
 
   # Check if package list is empty
@@ -222,10 +249,6 @@ main() {
 
   log_debug "Initializing script with args: $*"
 
-  # Initialize sudo dnf speed first
-  #TODO: Is there a better way to do this?
-  speed_up_dnf || log_warn "Failed to optimize DNF configuration"
-
   # Initialize option flags.
   all_option=false
   install_core_packages_option=false
@@ -262,37 +285,37 @@ main() {
   # Process command-line options.
   while getopts "abBcdFfghIilLnNopPrstTuUvVzqQx" opt; do
     case $opt in
-    a) all_option=true ;;
-    b) brave_option=true ;;
-    B) borgbackup_option=true ;;
-    c) touchpad_option=true ;;
-    i) install_core_packages_option=true ;;
-    I) install_system_specific_packages_option=true ;;
-    s) syncthing_option=true ;;
-    d) dnf_speed_option=true ;;
-    V) virt_option=true ;;
-    F) flatpak_option=true ;;
-    f) config_option=true ;;
-    l) librewolf_option=true ;;
-    L) lazygit_option=true ;;
-    q) qtile_option=true ;;
-    Q) qtile_udev_option=true ;;
-    r) rpm_option=true ;;
-    x) swap_ffmpeg_option=true ;;
-    o) ollama_option=true ;;
-    g) remove_gnome_option=true ;;
-    n) nvidia_cuda_option=true ;;
-    N) switch_nvidia_open_option=true ;;
-    v) vaapi_option=true ;;
-    p) protonvpn_option=true ;;
-    P) thinkfan_option=true ;;
-    t) trash_cli_option=true ;;
-    T) tlp_option=true ;;
-    u) update_system_option=true ;;
-    U) ufw_option=true ;;
-    z) zenpower_option=true ;;
-    h) usage ;;
-    *) usage ;;
+      a) all_option=true ;;
+      b) brave_option=true ;;
+      B) borgbackup_option=true ;;
+      c) touchpad_option=true ;;
+      i) install_core_packages_option=true ;;
+      I) install_system_specific_packages_option=true ;;
+      s) syncthing_option=true ;;
+      d) dnf_speed_option=true ;;
+      V) virt_option=true ;;
+      F) flatpak_option=true ;;
+      f) config_option=true ;;
+      l) librewolf_option=true ;;
+      L) lazygit_option=true ;;
+      q) qtile_option=true ;;
+      Q) qtile_udev_option=true ;;
+      r) rpm_option=true ;;
+      x) swap_ffmpeg_option=true ;;
+      o) ollama_option=true ;;
+      g) remove_gnome_option=true ;;
+      n) nvidia_cuda_option=true ;;
+      N) switch_nvidia_open_option=true ;;
+      v) vaapi_option=true ;;
+      p) protonvpn_option=true ;;
+      P) thinkfan_option=true ;;
+      t) trash_cli_option=true ;;
+      T) tlp_option=true ;;
+      u) update_system_option=true ;;
+      U) ufw_option=true ;;
+      z) zenpower_option=true ;;
+      h) usage ;;
+      *) usage ;;
     esac
   done
 
@@ -338,6 +361,12 @@ main() {
   if $all_option || $qtile_option || $trash_cli_option || $borgbackup_option || $syncthing_option || $ufw_option || $lazygit_option; then
     need_core_packages=true
     log_debug "Core packages are needed due to selected options"
+  fi
+
+  # Apply DNF speedup if any options requiring DNF installation are enabled
+  if needs_dnf_speedup; then
+    log_info "Optimizing DNF configuration for faster package operations..."
+    speed_up_dnf || log_warn "Failed to optimize DNF configuration"
   fi
 
   # Install core packages.
