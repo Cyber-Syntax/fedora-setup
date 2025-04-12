@@ -94,4 +94,5 @@ FLATPAK_PACKAGES=(
   # Proprietary softwares
   md.obsidian.Obsidian
   com.spotify.Client
+  com.zed.Zed # Zed editor
 )

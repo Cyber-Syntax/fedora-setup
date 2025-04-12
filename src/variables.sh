@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 
+
+
+USER=$(whoami)  # automatically detect current user
 # User-specific variables
-# WARN: Change these variables as needed.
-USER="developer"
+# WARN: Change these variables as needed
+# WARNING: Comment out the line below if you want to use the detected user.
 SESSION="qtile"
 LAPTOP_IP="192.168.1.54"
 

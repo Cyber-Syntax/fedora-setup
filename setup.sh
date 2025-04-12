@@ -17,19 +17,14 @@ source src/apps.sh
 source src/desktop.sh
 source src/laptop.sh
 
-# Variable notifying the user that the script is running.
-if ! id "$USER" &>/dev/null; then
-  log_warn "You forget to change variables according to your needs. Go src/variables.sh and change according to your needs."
-  # Check if user forgot to change the VARIABLES.
-  if [ -n "$SUDO_USER" ]; then
-    whoami="$SUDO_USER"
-  else
-    whoami=$(whoami)
-  fi
-
-  log_warn "Script USER variable is: $USER but your username: $whoami."
-  log_warn "Please change the USER variable and other variables according to your system configuration."
-
+echo "=================================================="
+echo "important: this script uses configuration values from src/variables.sh"
+echo "please ensure you've reviewed and adjusted these values for your system."
+echo "=================================================="
+#TODO: better way to check and notify user to prevent variable errors.
+read -p "Have you reviewed src/variables.sh? (y/n): " user_confirmed
+if [[ "${user_confirmed,,}" != "y" ]]; then
+  log_warn "Please review src/variables.sh before running this script."
   exit 1
 fi
 
@@ -428,8 +423,6 @@ main() {
     if [[ "$system_type" == "laptop" ]]; then
       log_info "Executing laptop-specific functions..."
       laptop_hostname_change
-      #TEST: Currently on laptop but can be used on globally when desktop switch lightdm
-      nopasswdlogin_group
       tlp_setup
       thinkfan_setup
       touchpad_setup
@@ -450,6 +443,7 @@ main() {
     setup_files "$system_type"
     switch_ufw_setup
 
+    nopasswdlogin_group
     # services
     syncthing_setup
     trash_cli_setup
