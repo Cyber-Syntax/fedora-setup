@@ -64,6 +64,8 @@ CORE_PACKAGES=(
   bash-language-server
   python3-devel
   dbus-devel
+  shfmt
+  ShellCheck
 )
 
 DESKTOP_PACKAGES=(

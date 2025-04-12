@@ -169,10 +169,10 @@ install_core_packages() {
 
 install_flatpak_packages() {
   log_info "Installing Flatpak packages..."
-  
+
   # Setup flathub if not already setup
   flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-  
+
   # Install flatpak packages as the regular user
   flatpak install -y flathub "${FLATPAK_PACKAGES[@]}" || {
     log_error "Failed to install Flatpak packages."
@@ -190,8 +190,8 @@ trash_cli_setup() {
   sudo cp "$trash_cli_service_file" "$dir_trash_cli_service" || {
     log_error "Failed to copy trash-cli service file"
     return 1
-  } 
-    
+  }
+
   # Create timer file
   sudo cp "$trash_cli_timer_file" "$dir_trash_cli_timer" || {
     log_error "Failed to copy trash-cli timer file"
@@ -201,7 +201,7 @@ trash_cli_setup() {
   log_info "Enabling trash-cli timer..."
   sudo systemctl daemon-reload
   sudo systemctl enable --now trash-cli.timer
-  
+
   log_info "trash-cli service setup completed."
 }
 
@@ -224,7 +224,9 @@ grub_timeout() {
     if grep -q '^GRUB_CMDLINE_LINUX=' "$boot_file"; then
       sudo sed -i '/^GRUB_CMDLINE_LINUX=/a GRUB_TIMEOUT=0' "$boot_file"
     else
-      sudo echo 'GRUB_TIMEOUT=0' >>"$boot_file"
+      # Fixed: Using printf with sudo tee to properly handle redirection with elevated privileges
+      #TEST: 
+      printf 'GRUB_TIMEOUT=0\n' | sudo tee -a "$boot_file" >/dev/null
     fi
   fi
 
@@ -245,7 +247,7 @@ grub_timeout() {
 sudoers_setup() {
   # 4. Sudoers snippet (common for both systems).
   #TODO: sudoers.d folder is not work?
-  # switch to cp instead of cat 
+  # switch to cp instead of cat
   echo "Creating/updating sudoers snippet ($sudoers_file)..."
   cat <<EOF >"$sudoers_file"
 ## Allow borgbackup script to run without password
@@ -402,33 +404,33 @@ system_updates() {
 # Syncthing setup
 syncthing_setup() {
   log_info "Setting up Syncthing..."
-  
+
   # For user-specific services, don't use sudo
   systemctl --user enable --now syncthing
   if [ $? -ne 0 ]; then
     log_error "Failed to enable Syncthing service"
     return 1
   fi
-  
+
   log_info "Syncthing enabled successfully."
 }
 
 # Switch display manager to lightdm
 switch_lightdm() {
   log_info "Switching display manager to LightDM..."
-  
+
   # Execute commands directly instead of using log_cmd
   sudo dnf install -y lightdm
   if [ $? -ne 0 ]; then
     log_error "Failed to install LightDM"
     return 1
   fi
-  
+
   sudo systemctl disable gdm
   if [ $? -ne 0 ]; then
     log_warn "Failed to disable GDM, it might not be installed"
   fi
-  
+
   sudo systemctl enable lightdm
   if [ $? -ne 0 ]; then
     log_error "Failed to enable LightDM"
@@ -450,7 +452,7 @@ clear_neovim() {
 oh_my_zsh_setup() {
   echo "Installing oh-my-zsh..."
   sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-  
+
   #TODO: plugins installation: currently manual, need automation with package managers like dnf probably
   git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
@@ -472,14 +474,14 @@ mirror_country_change() {
 #TODO: add option
 selinux_context() {
   log_info "Restoring SELinux context for home directory..."
-  
+
   # Execute command directly instead of using log_cmd
   restorecon -R /home/
   if [ $? -ne 0 ]; then
     log_error "Failed to restore SELinux context for /home/"
     return 1
   fi
-  
+
   log_info "SELinux context restored successfully."
 }
 
@@ -493,7 +495,7 @@ ssh_setup_laptop() {
     log_error "Failed to enable SSH service"
     return 1
   fi
-  
+
   # Write sshd config to allow password authentication
   #TODO: Add some security here
   cat <<EOF >/etc/ssh/sshd_config.d/temp_password_auth.conf
@@ -511,7 +513,7 @@ EOF
     log_error "Failed to copy SSH keys to laptop"
     return 1
   fi
-  
+
   log_info "SSH keys copied successfully."
 }
 
@@ -524,7 +526,7 @@ install_vscode() {
     log_error "Failed to import Microsoft key"
     return 1
   fi
-  
+
   echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null
   if [ $? -ne 0 ]; then
     log_error "Failed to create VS Code repository file"
@@ -537,7 +539,7 @@ install_vscode() {
     log_error "Failed to install VS Code"
     return 1
   fi
-  
+
   log_info "VS Code installed successfully."
 }
 
@@ -546,7 +548,7 @@ install_vscode() {
 #TESTING:
 virt_manager_setup() {
   log_info "Setting up virtualization..."
-  
+
   # Install required packages
   sudo dnf install -y @virtualization
   sudo dnf group install -y --with-optional virtualization
@@ -558,7 +560,7 @@ virt_manager_setup() {
 
   # Add user to libvirt group
   sudo usermod -aG libvirt "$USER"
-  
+
   # Enable and start libvirt service
   sudo systemctl enable --now libvirtd
   if [ $? -ne 0 ]; then
@@ -569,13 +571,12 @@ virt_manager_setup() {
   # Fix network nat issue, switch iptables
   sudo cp "$libvirt_file" "$dir_libvirt"
 
-  # enable network ufw 
+  # enable network ufw
   sudo ufw allow in on virbr0
   sudo ufw allow out on virbr0
-    
+
   log_info "Virtualization setup completed. You may need to log out and log back in for group membership changes to take effect."
 }
-
 
 # --- Main function ---
 
