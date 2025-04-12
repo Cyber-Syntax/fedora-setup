@@ -1,26 +1,40 @@
-# This is a basic workflow to help you get started with the GitHub Auto-Release on Commit Action.
-
-name: AutoRelease
+name: Create Release with Main Directory
 
 on:
   push:
-    branches: [ main ]
+    tags:
+      - "v*" # Trigger on tags starting with 'v' (e.g., v1.0.0)
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  release:
-    # The type of runner that the job will run on
+  create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - uses: actions/checkout@v4
-      - uses: CupOfTea696/gh-action-auto-release@v1.0.2
-        with:
-          title: "Release: $version"
-          tag: "v$semver"
-          draft: false
-          regex: "/^Release: #{semver}$/i"
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Zip Main Directory
+        run: zip -r release.zip ./main/ # Replace `main` with your directory name
+
+      - name: Create Release
+        id: create-release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: "Release ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./release.zip
+          asset_name: source-code.zip
+          asset_content_type: application/zip
