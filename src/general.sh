@@ -410,15 +410,25 @@ virt_manager_setup() {
     log_error "Failed to enable and start libvirt service"
     return 1
   fi
+  
   # Libvirtd
   local libvirt_file="./configs/libvirt/network.conf"
   local dir_libvirt="/etc/libvirt/network.conf"
+  
   # Fix network nat issue, switch iptables
-  sudo cp "$libvirt_file" "$dir_libvirt"
+  if ! sudo cp "$libvirt_file" "$dir_libvirt"; then
+    log_error "Failed to copy libvirt network configuration"
+  else
+    log_info "Libvirt network configuration updated successfully"
+  fi
 
   # enable network ufw
-  sudo ufw allow in on virbr0
-  sudo ufw allow out on virbr0
+  if ! sudo ufw allow in on virbr0; then
+    log_warn "Failed to allow incoming traffic on virbr0"
+  fi
+  if ! sudo ufw allow out on virbr0; then
+    log_warn "Failed to allow outgoing traffic on virbr0"
+  fi
 
   log_info "Virtualization setup completed. You may need to log out and log back in for group membership changes to take effect."
 }
