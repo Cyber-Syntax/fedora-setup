@@ -26,13 +26,13 @@ if ! command -v log_info &>/dev/null; then
 fi
 
 install_lazygit() {
-  echo "Installing Lazygit..."
+  log_info "Installing Lazygit..."
   # Check if the repository is already added
   if [[ ! -f "/etc/yum.repos.d/_copr:copr.fedorainfracloud.org:atim:lazygit.repo" ]]; then
-    dnf copr enable atim/lazygit -y
+    sudo dnf copr enable atim/lazygit -y
   fi
-  dnf install -y lazygit
-  echo "Lazygit installation completed."
+  sudo dnf install -y lazygit
+  log_info "Lazygit installation completed."
 }
 
 # Function: install_librewolf
