@@ -29,34 +29,38 @@ install_qtile_packages() {
 CORE_PACKAGES=(
   curl
   wget
-  zsh-autosuggestions
-  zsh-syntax-highlighting
-  zsh
-  vim
   ufw
-  zoxide
-  eza
-  fd-find
   trash-cli
+  syncthing
+  borgbackup
+  flatpak
+)
+
+APPS_PACKAGES=(
+  seahorse
+  xournalpp
+  kitty
+  keepassxc
+  neovim
+  vim
+  pavucontrol
+)
+
+DEV_PACKAGES=(
+  gh
+  ruff
   lm_sensors
   htop
   btop
   pip
-  keepassxc
-  neovim
-  vim
-  syncthing
-  borgbackup
-  seahorse
-  xournalpp
-  kitty
-  ruff
-  flatpak
-  bat
-  git
-  gh
+  zoxide
   fzf
-  pavucontrol
+  bat
+  eza
+  fd-find
+  zsh-autosuggestions
+  zsh-syntax-highlighting
+  zsh
   luarocks
   cargo
   yarnpkg
@@ -71,7 +75,6 @@ DESKTOP_PACKAGES=(
   virt-manager # Virtualization manager
   libvirt      # Virtualization toolkit
   nvidia-open
-  # gdm # Display manager; adjust if switching
   lightdm
   sysbench
 )

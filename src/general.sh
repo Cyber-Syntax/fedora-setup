@@ -81,7 +81,7 @@ grub_timeout() {
 sudoers_setup() {
   # 4. Sudoers snippet (common for both systems).
   log_info "Creating/updating sudoers snippet ($sudoers_file)..."
-  
+
   local sudoers_file="/etc/sudoers.d/custom-conf"
   # dir_sudoers="/etc/sudoers.d/custom-conf"
   # sudoers_file="./configs/custom-conf"
@@ -372,13 +372,30 @@ nopasswdlogin_group() {
   sudo usermod -aG nopasswdlogin,autologin "$USER"
 }
 
-#TEST:
+#TESTING:
 virt_manager_setup() {
   log_info "Setting up virtualization..."
 
+  # Check for UFW dependency
+  if ! command -v ufw &>/dev/null; then
+    log_info "UFW not installed but required for proper network configuration. Installing it first..."
+    if ! sudo dnf install -y ufw; then
+      log_error "Failed to install UFW, virtualization network rules won't be configured"
+      # Continue with basic setup since libvirt can work without UFW rules
+    fi
+  fi
+
   # Install required packages
-  sudo dnf install -y @virtualization
-  sudo dnf group install -y --with-optional virtualization
+  log_info "Installing virtualization packages..."
+  if ! sudo dnf install -y @virtualization; then
+    log_error "Failed to install virtualization group"
+    return 1
+  fi
+
+  if ! sudo dnf group install -y --with-optional virtualization; then
+    log_warn "Failed to install optional virtualization packages"
+    # Continue anyway with the base packages
+  fi
 
   # Create the libvirt group if it doesn't exist
   if ! getent group libvirt >/dev/null; then
