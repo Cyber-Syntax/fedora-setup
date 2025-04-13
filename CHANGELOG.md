@@ -1,18 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## v0.2.3-alpha
-### Changed
-  - feat: use CHANGELOG.md for releases
-
-## v0.2.2-alpha
-### Changed
-  - fix: create github action release
-  
 ## v0.2.1-alpha
 ### Changed
   - Add github action for release
   - refactor: variable.sh notify
+  - chore: add copilot-instructions
   - style: whitespaces
 
 ## v0.2.0-alpha
