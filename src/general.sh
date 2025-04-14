@@ -2,7 +2,6 @@
 
 # Source the logging module
 source src/logging.sh
-source src/variables.sh
 
 # Tweaks DNF configuration to improve performance.
 speed_up_dnf() {

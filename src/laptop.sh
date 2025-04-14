@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 source src/logging.sh
-source src/variables.sh
 
 laptop_hostname_change() {
   log_info "Changing hostname for laptop..."

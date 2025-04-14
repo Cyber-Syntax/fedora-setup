@@ -8,25 +8,17 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Source additional functions from separate files.
+#!/usr/bin/env bash
+
+# Setup XDG Base Directory paths if not already set
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+
 source src/logging.sh
-source src/variables.sh
-source src/packages.sh
+source src/config.sh
 source src/general.sh
 source src/apps.sh
 source src/desktop.sh
 source src/laptop.sh
-
-echo "=================================================="
-echo "important: this script uses configuration values from src/variables.sh"
-echo "please ensure you've reviewed and adjusted these values for your system."
-echo "=================================================="
-#TODO: better way to check and notify user to prevent variable errors.
-read -p "Have you reviewed src/variables.sh? (y/n): " user_confirmed
-if [[ "${user_confirmed,,}" != "y" ]]; then
-  log_warn "Please review src/variables.sh before running this script."
-  exit 1
-fi
 
 # Help message
 usage() {

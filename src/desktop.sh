@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 source src/logging.sh
-source src/variables.sh
 
 #TODO: Need to automate update to ollama?
 install_ollama() {
