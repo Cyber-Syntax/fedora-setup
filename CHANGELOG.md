@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v0.2.2-alpha
+### Changed
+    - fix: redundant code
+
 ## v0.2.1-alpha
 ### Changed
   - Add github action for release

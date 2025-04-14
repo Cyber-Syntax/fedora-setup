@@ -368,8 +368,8 @@ lightdm_autologin() {
   log_info "Setting up PAM configuration for LightDM autologin..."
 
   # Check if the required lines exist, if not add them
-  if ! sudo grep -q 'auth\s\+sufficient\s\+pam_succeed_if.so user ingroup nopasswdlogin' "$pam_lightdm"; then
-    echo 'auth        sufficient  pam_succeed_if.so user ingroup nopasswdlogin' | sudo tee -a "$pam_lightdm" >/dev/null
+  if ! sudo grep -q 'auth\s\+sufficient\s\+pam_succeed_if.so user ingroup autologin' "$pam_lightdm"; then
+    echo 'auth        sufficient  pam_succeed_if.so user ingroup autologin' | sudo tee -a "$pam_lightdm" >/dev/null
   fi
 
   if ! sudo grep -q 'auth\s\+include\s\+system-login' "$pam_lightdm"; then
@@ -377,6 +377,17 @@ lightdm_autologin() {
   fi
 
   log_info "LightDM autologin configuration completed successfully"
+}
+
+#TEST: Group for passwordless login
+#Seems like this isn't called or work?
+nopasswdlogin_group() {
+  echo "Creating group for passwordless login..."
+  sudo groupadd -r autologin 2>/dev/null || echo "Group 'autologin' already exists."
+  sudo gpasswd -a "$USER" nopasswdlogin
+  sudo gpasswd -a "$USER" autologin
+  echo "Group created for passwordless login."
+  sudo usermod -aG autologin "$USER"
 }
 
 setup_files() {
@@ -432,18 +443,7 @@ syncthing_setup() {
   log_info "Syncthing enabled successfully."
 }
 
-#TEST: Group for passwordless login
-#Seems like this isn't called or work?
-nopasswdlogin_group() {
-  echo "Creating group for passwordless login..."
-  sudo groupadd -r nopasswdlogin 2>/dev/null || echo "Group 'nopasswdlogin' already exists."
-  sudo groupadd -r autologin 2>/dev/null || echo "Group 'autologin' already exists."
-  sudo gpasswd -a "$USER" nopasswdlogin
-  sudo gpasswd -a "$USER" autologin
-  echo "Group created for passwordless login."
-  echo "Add users to the nopasswdlogin group to enable passwordless login."
-  sudo usermod -aG nopasswdlogin,autologin "$USER"
-}
+
 
 #TESTING:
 virt_manager_setup() {
