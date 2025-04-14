@@ -2,9 +2,14 @@
 All notable changes to this project will be documented in this file.
 
 ## v0.2.2-alpha
+### BREAKING CHANGES
+- Users need to setup their config with script and change according to
+their needs
+
 ### Changed
     - fix: redundant code
-
+    - refactor!: use XDG Base Directory
+    
 ## v0.2.1-alpha
 ### Changed
   - Add github action for release
