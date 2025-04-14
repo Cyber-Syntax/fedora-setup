@@ -12,8 +12,11 @@ Basically, saving time. Also, I enjoy scripting and wrote this in bash for learn
 # How to use the script
 
 1. Please change the variables as your system configuration:
-   - variables.sh
+   - ~/.config/fedora-setup/variables.json
+   - ~/.config/fedora-setup/packages.json
+2. Config files according to your system configuration:
    - src/configs/01-mytlp.conf
+   - src/configs/99-qtile.rules
 
 ```bash
 WARNING:
