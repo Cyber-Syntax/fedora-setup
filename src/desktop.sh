@@ -2,32 +2,34 @@
 
 source src/logging.sh
 
-#TODO: Need to automate update to ollama?
+#NOTE: This function install ollama but also it is update it with the same script
 install_ollama() {
-  log_info "Installing Ollama..."
-
   # Check if Ollama is already installed
   if command -v ollama &>/dev/null; then
-    log_info "Ollama is already installed"
-    return 0
+    local action="Updating"
+    log_info "$action Ollama..."
+  else
+    local action="Installing"
+    log_info "$action Ollama..."
   fi
 
   log_debug "Downloading and running Ollama install script..."
   # Execute curl command directly instead of passing it to log_cmd with pipes
   if ! curl -fsSL https://ollama.com/install.sh | sed 's/--add-repo/addrepo/' | sh; then
-    log_error "Failed to install Ollama"
+    log_error "Failed to $action Ollama"
     return 1
   fi
 
-  # Verify installation
+  # Verify installation/update
   if command -v ollama &>/dev/null; then
-    log_info "Ollama installation completed successfully"
+    log_info "Ollama ${action,,} completed successfully"
     return 0
   else
-    log_error "Ollama binary not found after installation"
+    log_error "Ollama binary not found after $action"
     return 1
   fi
 }
+
 
 #TEST: Currently only for desktop
 borgbackup_setup() {
