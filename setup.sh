@@ -53,6 +53,7 @@ NOTE: Below options consider safe to use but still be careful.
   -A    Install application packages.
   -D    Install development packages.
   -C    Install Visual Studio Code.
+  -M    Set up default applications using mimeapps.list.
 
 Experimental: Below functions are need to tested with caution.
   -a    Execute all functions. (NOTE:System detection handled by hostname)
@@ -296,9 +297,10 @@ main() {
   update_system_option=false
   virt_option=false
   install_vscode_option=false
+  setup_default_applications_option=false
 
   # Process command-line options.
-  while getopts "abBcdDFfghIiAalLnNopPrstTuUvVzqQxC" opt; do
+  while getopts "abBcdDFfghIiAalLnNopPrstTuUvVzqQxCM" opt; do
     case $opt in
       a) all_option=true ;;
       A) install_app_packages_option=true ;;
@@ -332,6 +334,7 @@ main() {
       U) ufw_option=true ;;
       z) zenpower_option=true ;;
       C) install_vscode_option=true ;;
+      M) setup_default_applications_option=true ;;
       h) usage ;;
       *) usage ;;
     esac
@@ -369,7 +372,8 @@ main() {
     [[ "$ufw_option" == "false" ]] &&
     [[ "$update_system_option" == "false" ]] &&
     [[ "$virt_option" == "false" ]] &&
-    [[ "$install_vscode_option" == "false" ]]; then
+    [[ "$install_vscode_option" == "false" ]] &&
+    [[ "$setup_default_applications_option" == "false" ]]; then
     log_warn "No options specified"
     usage
   fi
@@ -450,6 +454,7 @@ main() {
     install_lazygit
     install_protonvpn
     install_flatpak_packages
+    setup_default_applications
 
   else
     log_info "Executing selected additional functions..."
@@ -484,6 +489,7 @@ main() {
     if $update_system_option; then system_updates; fi
     if $virt_option; then virt_manager_setup; fi
     if $install_vscode_option; then install_vscode; fi
+    if $setup_default_applications_option; then setup_default_applications; fi
   fi
 
   log_info "Script execution completed."

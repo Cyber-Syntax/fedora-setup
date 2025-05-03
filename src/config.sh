@@ -7,7 +7,7 @@ check_and_create_config() {
     local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fedora-setup"
     local packages_file="$config_dir/packages.json"
     local variables_file="$config_dir/variables.json"
-    
+
     # Check if config directory exists
     if [[ ! -d "$config_dir" ]]; then
         echo -e "\n===== Configuration Setup ====="
@@ -24,12 +24,12 @@ check_and_create_config() {
             exit 1
         fi
     fi
-    
+
     # Check if configuration files exist
     local files_needed=()
     [[ ! -f "$packages_file" ]] && files_needed+=("packages.json")
     [[ ! -f "$variables_file" ]] && files_needed+=("variables.json")
-    
+
     # Only ask if there are files needed
     if [[ ${#files_needed[@]} -gt 0 ]]; then
         echo -e "\n===== Default Configuration ====="
@@ -40,7 +40,7 @@ check_and_create_config() {
         echo "These will contain default settings for your system."
         read -p "Create these files with default values? [y/N] " answer
         echo
-        
+
         if [[ "$answer" =~ ^[Yy]$ ]]; then
             # Create the files - check each creation
             for file in "${files_needed[@]}"; do
@@ -62,7 +62,7 @@ check_and_create_config() {
                     fi
                 fi
             done
-            
+
             echo -e "\n===== Configuration Created ====="
             echo "Default configuration files have been created."
             echo "You may want to review and customize them at:"
@@ -86,7 +86,7 @@ load_json_config() {
     local config_file="$1"
     local config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fedora-setup"
     local full_path="$config_dir/$config_file"
-    
+
     # Check if the file exists first
     if [[ -f "$full_path" ]]; then
         echo "$full_path"
@@ -95,17 +95,17 @@ load_json_config() {
         echo "./configs/$config_file"
         return 0
     fi
-    
+
     # The file doesn't exist - handle creation
     echo -e "\nConfiguration file not found: $config_file"
     echo "Would you like to create it with default values?"
     read -p "[y/N] " answer
     echo
-    
+
     if [[ "$answer" =~ ^[Yy]$ ]]; then
         # Create directory if it doesn't exist
         mkdir -p "$config_dir"
-        
+
         # Create default configuration
         case "$config_file" in
             "packages.json")
@@ -119,7 +119,7 @@ load_json_config() {
                 return 1
                 ;;
         esac
-        
+
         # Verify the file was created
         if [[ -f "$full_path" ]]; then
             echo "Created default $config_file successfully."
@@ -172,11 +172,11 @@ parse_json() {
 # Create default packages JSON
 create_default_packages_json() {
     local output_file="$1"
-    
+
     # Ensure directory exists
     mkdir -p "$(dirname "$output_file")"
 
-    cat > "$output_file" <<EOF
+    cat >"$output_file" <<EOF
 {
     "core": [
         "curl",
@@ -263,7 +263,7 @@ EOF
         log_error "Failed to create $output_file"
         return 1
     fi
-    
+
     return 0
 }
 
@@ -271,11 +271,11 @@ EOF
 create_default_variables_json() {
     local output_file="$1"
     local current_user=$(whoami)
-    
+
     # Ensure directory exists
     mkdir -p "$(dirname "$output_file")"
 
-    cat > "$output_file" <<EOF
+    cat >"$output_file" <<EOF
 {
     "user": "$current_user",
     "session": "qtile",
@@ -293,6 +293,40 @@ create_default_variables_json() {
     "system": {
         "mirror_country": "de",
         "repo_dir": "/etc/yum.repos.d"
+    },
+    "default_applications": {
+        "browser": "brave",
+        "file_manager": "thunar",
+        "image_viewer": "loupe",
+        "text_editor": "nvim",
+        "terminal": "kitty"
+    },
+    "mime_associations": {
+        "browser": [
+            "x-scheme-handler/http", 
+            "application/xhtml+xml", 
+            "text/html", 
+            "x-scheme-handler/https"
+        ],
+        "image_viewer": [
+            "image/jpeg", 
+            "image/png", 
+            "image/gif", 
+            "image/webp", 
+            "image/tiff"
+        ],
+        "text_editor": [
+            "text/plain", 
+            "application/x-shellscript", 
+            "text/x-python"
+        ],
+        "file_manager": [
+            "inode/directory", 
+            "application/x-gnome-saved-search"
+        ],
+        "terminal": [
+            "application/x-terminal"
+        ]
     }
 }
 EOF
@@ -302,48 +336,48 @@ EOF
         log_error "Failed to create $output_file"
         return 1
     fi
-    
+
     return 0
 }
 
 # Load specific values from the variables.json file
 load_variables() {
     log_info "Loading variables from configuration..."
-    
+
     # First, make sure we have a variables file
     local variables_file=$(load_json_config "variables.json")
-    
+
     if [[ -z "$variables_file" || ! -f "$variables_file" ]]; then
         log_error "Failed to load variables configuration"
         exit 1
     fi
-    
+
     # Load all variables into Bash variables with proper error handling
-    
+
     # Simple key-value pairs - mapping from snake_case in JSON to same in Bash
     USER=$(parse_json "$variables_file" ".user")
     SESSION=$(parse_json "$variables_file" ".session")
     LAPTOP_IP=$(parse_json "$variables_file" ".laptop_ip")
-    
+
     # Nested values
     hostname_desktop=$(parse_json "$variables_file" ".hostnames.desktop")
     hostname_laptop=$(parse_json "$variables_file" ".hostnames.laptop")
-    
+
     # Browser settings
     firefox_profile=$(parse_json "$variables_file" ".browser.firefox_profile")
     firefox_profile_path=$(parse_json "$variables_file" ".browser.firefox_profile_path")
     librewolf_dir=$(parse_json "$variables_file" ".browser.librewolf_dir")
     librewolf_profile=$(parse_json "$variables_file" ".browser.librewolf_profile")
-    
+
     # System settings
     mirror_country=$(parse_json "$variables_file" ".system.mirror_country")
     REPO_DIR=$(parse_json "$variables_file" ".system.repo_dir")
-    
+
     # Export all variables to make them available to the script
     export USER SESSION LAPTOP_IP hostname_desktop hostname_laptop
     export firefox_profile firefox_profile_path librewolf_dir librewolf_profile
     export mirror_country REPO_DIR
-    
+
     log_info "Variables loaded successfully"
 }
 
@@ -380,16 +414,16 @@ get_variable() {
 # Load package arrays from JSON
 load_package_arrays() {
     log_info "Loading package arrays from configuration..."
-    
+
     # Get the packages file path
     local packages_file=$(load_json_config "packages.json")
-    
+
     # Verify file exists
     if [[ -z "$packages_file" || ! -f "$packages_file" ]]; then
         log_error "Failed to load packages configuration"
         return 1
     fi
-    
+
     # Load each package array from the JSON
     CORE_PACKAGES=($(parse_json "$packages_file" ".core[]"))
     APPS_PACKAGES=($(parse_json "$packages_file" ".apps[]"))
@@ -398,42 +432,42 @@ load_package_arrays() {
     LAPTOP_PACKAGES=($(parse_json "$packages_file" ".laptop[]"))
     QTILE_PACKAGES=($(parse_json "$packages_file" ".qtile[]"))
     FLATPAK_PACKAGES=($(parse_json "$packages_file" ".flatpak[]"))
-    
+
     # Export all arrays to make them available to the script
-    export CORE_PACKAGES APPS_PACKAGES DEV_PACKAGES 
+    export CORE_PACKAGES APPS_PACKAGES DEV_PACKAGES
     export DESKTOP_PACKAGES LAPTOP_PACKAGES
     export QTILE_PACKAGES FLATPAK_PACKAGES
-    
+
     log_info "Package arrays loaded successfully"
 }
 
 # Modified install_qtile_packages that uses the loaded arrays
 install_qtile_packages() {
-  log_info "Installing Qtile packages..."
-  
-  # Install packages - using the loaded array
-  sudo dnf install -y "${QTILE_PACKAGES[@]}" || {
-    log_error "Failed to install Qtile packages."
-    return 1
-  }
-  
-  log_info "Qtile packages installed successfully"
+    log_info "Installing Qtile packages..."
+
+    # Install packages - using the loaded array
+    sudo dnf install -y "${QTILE_PACKAGES[@]}" || {
+        log_error "Failed to install Qtile packages."
+        return 1
+    }
+
+    log_info "Qtile packages installed successfully"
 }
 
 # Function to initialize all configuration
 init_config() {
     log_info "Initializing configuration..."
-    
+
     # Check and create config if needed
     check_and_create_config
-    
+
     # Load all configuration values
     load_variables
     load_package_arrays
-    
+
     log_info "Configuration loaded successfully and ready to use"
     log_info "All package arrays and variables are now available"
-    
+
     # Print a summary of the loaded configuration
     log_info "===== Configuration Summary ====="
     log_info "User: $USER"
