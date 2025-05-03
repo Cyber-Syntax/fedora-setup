@@ -177,27 +177,67 @@ install_brave() {
   modify_brave_desktop
 }
 
-# Install vscode
+# Function: install_vscode
+# Purpose: Installs Visual Studio Code
+# This function adds the Microsoft repository, imports the GPG key,
+# and installs VS Code from the official Microsoft repository.
 install_vscode() {
   log_info "Installing Visual Studio Code..."
-  #FIX: need proper way handle
-  if ! sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc; then
-    log_error "Failed to import Microsoft key"
+  local vscode_repo_file="${REPO_DIR}/vscode.repo"
+  local import_key_success=false
+  local repo_create_success=false
+
+  # Import the Microsoft GPG key
+  log_info "Importing Microsoft GPG key..."
+  if sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc; then
+    import_key_success=true
+    log_info "Microsoft GPG key imported successfully."
+  else
+    log_error "Failed to import Microsoft GPG key."
     return 1
   fi
 
-  if ! echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\nautorefresh=1\ntype=rpm-md\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo >/dev/null; then
-    log_error "Failed to create VS Code repository file"
-    return 1
+  # Create the VS Code repository file if it doesn't exist
+  if [[ ! -f "$vscode_repo_file" ]]; then
+    log_info "Creating Visual Studio Code repository file..."
+
+    # Create repository file content
+    local repo_content="[code]
+name=Visual Studio Code
+baseurl=https://packages.microsoft.com/yumrepos/vscode
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft.asc"
+
+    # Write the repository file
+    if echo "$repo_content" | sudo tee "$vscode_repo_file" >/dev/null; then
+      repo_create_success=true
+      log_info "Visual Studio Code repository file created successfully."
+    else
+      log_error "Failed to create Visual Studio Code repository file."
+      return 1
+    fi
+  else
+    log_info "Visual Studio Code repository file already exists."
+    repo_create_success=true
   fi
 
-  sudo dnf check-update
-  if ! sudo dnf install -y code; then
-    log_error "Failed to install VS Code"
-    return 1
+  # Update repository metadata
+  log_info "Updating repository metadata..."
+  if ! sudo dnf check-update; then
+    log_info "Repository metadata update completed with some warnings."
+    # Don't exit here as check-update returns non-zero when updates are available
   fi
 
-  log_info "VS Code installed successfully."
+  # Install VS Code
+  log_info "Installing VS Code package..."
+  if sudo dnf install -y code; then
+    log_success "Visual Studio Code installed successfully."
+    return 0
+  else
+    log_error "Failed to install Visual Studio Code package."
+    return 1
+  fi
 }
 
 # TEST: Install ProtonVPN repository and enable OpenVPN for SELinux.

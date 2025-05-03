@@ -52,6 +52,7 @@ NOTE: Below options consider safe to use but still be careful.
   -x    Swap ffmpeg-free with ffmpeg.
   -A    Install application packages.
   -D    Install development packages.
+  -C    Install Visual Studio Code.
 
 Experimental: Below functions are need to tested with caution.
   -a    Execute all functions. (NOTE:System detection handled by hostname)
@@ -294,9 +295,10 @@ main() {
   protonvpn_option=false
   update_system_option=false
   virt_option=false
+  install_vscode_option=false
 
   # Process command-line options.
-  while getopts "abBcdDFfghIiAalLnNopPrstTuUvVzqQx" opt; do
+  while getopts "abBcdDFfghIiAalLnNopPrstTuUvVzqQxC" opt; do
     case $opt in
       a) all_option=true ;;
       A) install_app_packages_option=true ;;
@@ -329,6 +331,7 @@ main() {
       u) update_system_option=true ;;
       U) ufw_option=true ;;
       z) zenpower_option=true ;;
+      C) install_vscode_option=true ;;
       h) usage ;;
       *) usage ;;
     esac
@@ -365,7 +368,8 @@ main() {
     [[ "$protonvpn_option" == "false" ]] &&
     [[ "$ufw_option" == "false" ]] &&
     [[ "$update_system_option" == "false" ]] &&
-    [[ "$virt_option" == "false" ]]; then
+    [[ "$virt_option" == "false" ]] &&
+    [[ "$install_vscode_option" == "false" ]]; then
     log_warn "No options specified"
     usage
   fi
@@ -479,6 +483,7 @@ main() {
     if $protonvpn_option; then install_protonvpn; fi
     if $update_system_option; then system_updates; fi
     if $virt_option; then virt_manager_setup; fi
+    if $install_vscode_option; then install_vscode; fi
   fi
 
   log_info "Script execution completed."
