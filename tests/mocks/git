@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Mock git command for testing
+
+# Log the invocation
+echo "git $*" >> "$BATS_TEST_TMPDIR/git.log"
+
+# Check if this is a clone operation
+if [[ "$1" == "clone" ]]; then
+  # If FAIL_GIT_CLONE is set, simulate failure
+  if [[ -n "${FAIL_GIT_CLONE:-}" ]]; then
+    echo "Error: Failed to clone repository" >&2
+    exit 1
+  fi
+  
+  # Create a directory for the cloned repo
+  if [[ -n "$3" ]]; then
+    # Create the target directory to simulate successful clone
+    mkdir -p "$3"
+    
+    # Create a mock auto-cpufreq-installer script
+    cat > "$3/auto-cpufreq-installer" <<EOF
+#!/usr/bin/env bash
+echo "This is a mock auto-cpufreq-installer script"
+exit ${INSTALLER_EXIT_CODE:-0}
+EOF
+    
+    # Make the installer script executable
+    chmod +x "$3/auto-cpufreq-installer"
+  fi
+fi
+
+exit 0

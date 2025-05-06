@@ -231,8 +231,51 @@ setup() {
   
   export -f log_info log_error log_success log_debug log_warn
   
-  # Source the variables script if available, but don't fail if it's not
-  source "${REPO_ROOT}/src/variables.sh" 2>/dev/null || true
+  # Setup mock variables for testing
+  export XDG_CONFIG_HOME="$BATS_TEST_TMPDIR/config"
+  export CONFIG_DIR="$XDG_CONFIG_HOME/fedora-setup"
+  export VARIABLES_FILE="$CONFIG_DIR/variables.json"
+  
+  # Create mock variables.json file for testing
+  mkdir -p "$CONFIG_DIR"
+  cat > "$VARIABLES_FILE" <<EOF
+{
+  "user": "developer",
+  "laptop": {
+    "host": "fedora-laptop",
+    "ip": "192.168.1.54",
+    "session": "hyprland",
+    "display_manager": "sddm"
+  },
+  "desktop": {
+    "host": "fedora",
+    "ip": "192.168.1.100",
+    "session": "qtile",
+    "display_manager": "sddm"
+  },
+  "hostnames": {
+    "desktop": "fedora",
+    "laptop": "fedora-laptop"
+  },
+  "browser": {
+    "firefox_profile": "test.default-release",
+    "firefox_profile_path": "/home/developer/.mozilla/firefox/test.default-release",
+    "librewolf_dir": "/home/developer/.librewolf/",
+    "librewolf_profile": "/home/developer/.librewolf/profiles.ini"
+  },
+  "system": {
+    "mirror_country": "de",
+    "repo_dir": "/etc/yum.repos.d"
+  }
+}
+EOF
+
+  # Set up key variables for tests
+  export user="developer"
+  export hostname_desktop="fedora"
+  export hostname_laptop="fedora-laptop"
+  export desktop_session="qtile"
+  export laptop_session="hyprland"
   
   # Get the content of desktop.sh and modify paths for testing
   cat "${REPO_ROOT}/src/desktop.sh" | \

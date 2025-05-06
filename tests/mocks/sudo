@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Mock sudo command for testing
+# This script delegates to the appropriate command and ensures proper logging
+
+# Log the invocation
+echo "sudo $*" >> "$BATS_TEST_TMPDIR/sudo.log"
+
+# Handle specific commands that need special treatment
+if [[ "$1" == "dnf" ]]; then
+  # For dnf commands, log to the sudo dnf.log file expected by tests
+  echo "$*" >> "$BATS_TEST_TMPDIR/sudo dnf.log"
+  
+  # Execute the dnf mock directly with the rest of the arguments
+  "$(dirname "$0")/dnf" "${@:2}"
+  exit $?
+elif [[ "$1" == "./auto-cpufreq-installer" ]]; then
+  # For auto-cpufreq installer, simulate success unless INSTALLER_EXIT_CODE is set
+  exit ${INSTALLER_EXIT_CODE:-0}
+else
+  # For any other command, just execute it directly
+  "$@"
+  exit $?
+fi

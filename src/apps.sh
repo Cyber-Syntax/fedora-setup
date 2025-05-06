@@ -10,14 +10,61 @@ USER_DESKTOP_DIR="${USER_DESKTOP_DIR:-$USER_HOME/.local/share/applications}"
 # Parameterize the location of the system desktop file
 DESKTOP_SYSTEM_FILE="${DESKTOP_SYSTEM_FILE:-/usr/share/applications/brave-browser.desktop}"
 
-# Source helper scripts if available (logging.sh and variables.sh are optional)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Only define SCRIPT_DIR if it's not already defined (to avoid readonly variable error)
+if [[ -z "${SCRIPT_DIR:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+# Source helper scripts if available (logging.sh is essential)
 source "${SCRIPT_DIR}/logging.sh" 2>/dev/null || {
   echo "Warning: logging.sh not found; proceeding without logging functions."
 }
-source "${SCRIPT_DIR}/variables.sh" 2>/dev/null || {
-  echo "Warning: variables.sh not found; proceeding without extra variables."
-}
+
+# Directly load variables from variables.json in XDG config directory
+# Using apps_* prefix to avoid conflicts with readonly variables from config.sh
+apps_xdg_config="${XDG_CONFIG_HOME:-$HOME/.config}"
+apps_config_dir="$apps_xdg_config/fedora-setup"
+apps_variables_file="$apps_config_dir/variables.json"
+
+if [[ -f "$apps_variables_file" ]]; then
+  # Check if jq is installed
+  if ! command -v jq &>/dev/null; then
+    echo "Warning: jq is required but not installed. Some variables may not be available."
+  else
+    # Load key variables from variables.json
+    user=$(jq -r '.user // "'"$(whoami)"'"' "$apps_variables_file" 2>/dev/null)
+
+    # Laptop settings
+    laptop_session=$(jq -r '.laptop.session // "hyprland"' "$apps_variables_file" 2>/dev/null)
+    laptop_display_manager=$(jq -r '.laptop.display_manager // "sddm"' "$apps_variables_file" 2>/dev/null)
+    laptop_ip=$(jq -r '.laptop.ip // "192.168.1.54"' "$apps_variables_file" 2>/dev/null)
+    hostname_laptop=$(jq -r '.laptop.host // "fedora-laptop"' "$apps_variables_file" 2>/dev/null)
+
+    # Desktop settings
+    desktop_session=$(jq -r '.desktop.session // "qtile"' "$apps_variables_file" 2>/dev/null)
+    desktop_display_manager=$(jq -r '.desktop.display_manager // "sddm"' "$apps_variables_file" 2>/dev/null)
+    desktop_ip=$(jq -r '.desktop.ip // "192.168.1.100"' "$apps_variables_file" 2>/dev/null)
+    hostname_desktop=$(jq -r '.desktop.host // "fedora"' "$apps_variables_file" 2>/dev/null)
+
+    # Browser settings
+    firefox_profile=$(jq -r '.browser.firefox_profile // ""' "$apps_variables_file" 2>/dev/null)
+    firefox_profile_path=$(jq -r '.browser.firefox_profile_path // ""' "$apps_variables_file" 2>/dev/null)
+    librewolf_dir=$(jq -r '.browser.librewolf_dir // ""' "$apps_variables_file" 2>/dev/null)
+    librewolf_profile=$(jq -r '.browser.librewolf_profile // ""' "$apps_variables_file" 2>/dev/null)
+
+    # System settings
+    mirror_country=$(jq -r '.system.mirror_country // "de"' "$apps_variables_file" 2>/dev/null)
+    repo_dir=$(jq -r '.system.repo_dir // "/etc/yum.repos.d"' "$apps_variables_file" 2>/dev/null)
+
+    # Export variables
+    export user laptop_session laptop_display_manager laptop_ip hostname_laptop
+    export desktop_session desktop_display_manager desktop_ip hostname_desktop
+    export firefox_profile firefox_profile_path librewolf_dir librewolf_profile
+    export mirror_country repo_dir
+  fi
+else
+  echo "Warning: variables.json not found at $apps_variables_file; proceeding with default values."
+fi
 
 # Logging helper functions if not defined (very basic version)
 if ! command -v log_info &>/dev/null; then
@@ -294,5 +341,261 @@ install_protonvpn() {
   fi
 
   log_info "ProtonVPN installation completed successfully"
+  return 0
+}
+
+#TEST: Need to be tested
+# Function: install_auto_cpufreq
+# Purpose: Installs auto-cpufreq from GitHub repository for automatic CPU speed and power optimization
+install_auto_cpufreq() {
+  log_info "Installing auto-cpufreq..."
+
+  local temp_dir
+  temp_dir=$(mktemp -d)
+
+  log_info "Cloning auto-cpufreq repository..."
+  if ! git clone https://github.com/AdnanHodzic/auto-cpufreq.git "$temp_dir"; then
+    log_error "Failed to clone auto-cpufreq repository"
+    return 1
+  fi
+
+  log_info "Running auto-cpufreq installer..."
+  log_info "NOTE: The installer will ask for confirmation during installation."
+  log_info "Please respond to the prompts as needed (typically 'y' to proceed)."
+
+  cd "$temp_dir" || {
+    log_error "Failed to navigate to auto-cpufreq directory"
+    return 1
+  }
+
+  if ! sudo ./auto-cpufreq-installer; then
+    log_error "auto-cpufreq installation failed"
+    cd - > /dev/null || true
+    return 1
+  fi
+
+  cd - > /dev/null || true
+  rm -rf "$temp_dir"
+
+  log_info "auto-cpufreq installation completed"
+  return 0
+}
+# Function: install_hyprland
+# Purpose: Installs Hyprland Wayland compositor and its dependencies
+install_hyprland() {
+  log_info "Installing Hyprland and dependencies..."
+
+  # # Add COPR repository for Hyprland
+#TODO: this is for faster updates and newer packages
+# but it is might be unstable, add here a approve from user
+# to choose if he wants to add the repo or not
+  # log_info "Adding Hyprland COPR repository..."
+  # if ! sudo dnf copr enable solopasha/hyprland -y; then
+  #   log_error "Failed to add Hyprland COPR repository"
+  #   return 1
+  # fi
+
+  # Core Hyprland packages
+  local hypr_packages=(
+    "hyprland"                # The Hyprland compositor
+    "waybar"                  # Status bar for Wayland
+    "dunst"                   # Notification daemon
+    "gammastep"               # Color temperature adjustment
+    "blueman"                 # Bluetooth manager
+    "swaybg"                  # Setting up wallpaper
+    "wl-clipboard"            # Wayland clipboard utilities
+    "swaylock"        # Lockscreen
+    "swayidle"                # Idle management daemon
+    "wlr-randr"               # Xrandr clone for wlroots compositors
+    "wev"                     # Wayland event viewer
+    "brightnessctl"           # Brightness control
+    "grim"                    # Screenshots
+    "slurp"                   # Selection tool for screenshots
+    "rofi"                    # Application launcher
+    "sddm"                    # Display manager
+  )
+
+  # Install Hyprland and related packages
+  log_info "Installing Hyprland and essential packages..."
+  if ! sudo dnf install -y "${hypr_packages[@]}"; then
+    log_error "Failed to install Hyprland packages"
+    return 1
+  fi
+
+  # # Installing grimblast (screenshot utility)
+  # log_info "Installing grimblast for screenshots..."
+  # if ! sudo dnf copr enable agriffis/sway-extras -y; then
+  #   log_warn "Failed to enable sway-extras COPR repository for grimblast"
+  # else
+  #   if ! sudo dnf install -y grimblast; then
+  #     log_warn "Failed to install grimblast. You may need to install it manually."
+  #   fi
+  # fi
+
+  # # Install cliphist (clipboard manager)
+  # log_info "Installing cliphist (clipboard manager)..."
+  # if ! command -v go &>/dev/null; then
+  #   sudo dnf install -y golang
+  # fi
+
+  # # Using go install for cliphist
+  # if ! go install github.com/sentriz/cliphist@latest; then
+  #   log_warn "Failed to install cliphist. Make sure Go is properly configured."
+  # fi
+
+  log_info "Hyprland installation completed."
+  log_warn "IMPORTANT: You should switch to SDDM and exit your current desktop environment to use Hyprland."
+  log_info "Run the script with -S option to switch to SDDM after you've exited your desktop environment."
+
+  return 0
+}
+
+# Function: sddm_autologin
+# Purpose: Configures SDDM for automatic login with the current user, using machine-specific settings
+sddm_autologin() {
+  log_info "Setting up SDDM autologin..."
+
+  # Determine system type from hostname
+  local hostname
+  hostname=$(hostname 2>/dev/null || echo "unknown")
+  local system_type="unknown"
+
+  # Check hostname against our configured values from the nested structure
+  if [[ "$hostname" == "$hostname_desktop" ]]; then
+    system_type="desktop"
+  elif [[ "$hostname" == "$hostname_laptop" ]]; then
+    system_type="laptop"
+  else
+    log_warn "Unknown hostname '$hostname', will use default session"
+  fi
+
+  log_info "Detected system type: $system_type"
+
+  # Get user from variables or fall back to current user
+  local config_user="${user:-$(whoami)}"
+
+  # Get session based on system type, using our loaded variables
+  # These variables are loaded from the nested structure in load_variables
+  local session_value
+  if [[ "$system_type" == "desktop" ]]; then
+    # Use desktop-specific session
+    session_value="${desktop_session}"
+  elif [[ "$system_type" == "laptop" ]]; then
+    # Use laptop-specific session
+    session_value="${laptop_session}"
+  else
+    # Use hyprland as default when system type is unknown
+    session_value="hyprland"
+  fi
+
+  # If session is still empty, fall back to hyprland
+  session_value="${session_value:-hyprland}"
+
+  log_info "Using session: $session_value for user: $config_user"
+
+  # Check if SDDM is installed
+  if ! rpm -q sddm &>/dev/null; then
+    log_error "SDDM is not installed. Please install it first."
+    return 1
+  fi
+
+  # Determine which configuration file to use
+  local conf_file
+  if [[ -f "/etc/sddm.conf" ]]; then
+    conf_file="/etc/sddm.conf"
+    log_debug "Using existing SDDM config file at /etc/sddm.conf"
+  else
+    # Create SDDM configuration directory if it doesn't exist
+    if [[ ! -d "/etc/sddm.conf.d/" ]]; then
+      if ! sudo mkdir -p /etc/sddm.conf.d/; then
+        log_error "Failed to create SDDM configuration directory"
+        return 1
+      fi
+    fi
+    conf_file="/etc/sddm.conf.d/autologin.conf"
+    log_debug "Using SDDM config file at /etc/sddm.conf.d/autologin.conf"
+  fi
+
+  # Create backup of original file if it exists
+  if [[ -f "$conf_file" && ! -f "${conf_file}.bak" ]]; then
+    log_debug "Creating backup of SDDM configuration..."
+    if ! sudo cp "$conf_file" "${conf_file}.bak"; then
+      log_warn "Failed to create backup of SDDM configuration"
+    else
+      log_debug "SDDM configuration backup created at ${conf_file}.bak"
+    fi
+  fi
+
+  # Parse existing content if file exists and extract sections
+  local existing_content=""
+  local general_section=""
+  local other_sections=""
+
+  if [[ -f "$conf_file" ]]; then
+    existing_content=$(sudo cat "$conf_file" 2>/dev/null)
+
+    # Extract the [General] section if it exists
+    if echo "$existing_content" | grep -q '^\[General\]'; then
+      general_section=$(echo "$existing_content" | awk '
+        BEGIN {in_general = 0; content = ""}
+        /^\[General\]/ {in_general = 1; content = content $0 "\n"; next}
+        /^\[/ && in_general {in_general = 0; next}
+        in_general {content = content $0 "\n"}
+        END {print content}
+      ')
+    fi
+
+    # Extract other sections except [Autologin] and [General]
+    other_sections=$(echo "$existing_content" | awk '
+      BEGIN {in_skip = 0; content = ""}
+      /^\[(Autologin|General)\]/ {in_skip = 1; next}
+      /^\[/ && in_skip {in_skip = 0; content = content $0 "\n"; next}
+      /^\[/ && !in_skip {content = content $0 "\n"; next}
+      !in_skip {content = content $0 "\n"}
+      END {print content}
+    ')
+  fi
+
+  # Create new autologin section with clean formatting
+  local autologin_section="[Autologin]\n"
+  autologin_section+="# Username for autologin session\n"
+  autologin_section+="User=${config_user}\n"
+  autologin_section+="# Name of session file for autologin session\n"
+  autologin_section+="Session=${session_value}.desktop\n"
+  autologin_section+="# Whether sddm should automatically log back into sessions when they exit\n"
+  autologin_section+="Relogin=false\n"
+
+  # Build the new configuration content with proper section ordering and spacing
+  local new_content=""
+  new_content+="${autologin_section}\n"
+
+  # Add other sections if they exist (excluding [Autologin] and [General])
+  if [[ -n "$other_sections" ]]; then
+    new_content+="${other_sections}\n"
+  fi
+
+  # Add [General] section at the end if it exists
+  if [[ -n "$general_section" ]]; then
+    new_content+="${general_section}"
+  fi
+
+  # Trim trailing newlines and ensure file ends with exactly one newline
+  new_content=$(echo -e "$new_content" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')
+  new_content="${new_content}\n"
+
+  # Write the updated configuration
+  log_debug "Writing new SDDM configuration..."
+  if ! echo -e "$new_content" | sudo tee "$conf_file" >/dev/null; then
+    log_error "Failed to write SDDM autologin configuration"
+    return 1
+  fi
+
+  # Set proper file permissions
+  if ! sudo chmod 644 "$conf_file"; then
+    log_warn "Failed to set proper permissions on SDDM configuration file"
+  fi
+
+  log_success "SDDM autologin configuration completed successfully"
+  log_info "The system will automatically log in as $config_user to $session_value after reboot"
   return 0
 }

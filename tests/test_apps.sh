@@ -44,6 +44,9 @@ setup() {
   # Override USER variable to match current user for ownership operations
   export USER=$(whoami)
   
+  # Create a dnf.log file in the test directory
+  touch "$BATS_TEST_TMPDIR/sudo dnf.log"
+  
   # Mock the chown command for tests
   function chown() {
     # Do nothing, just pretend we changed ownership
@@ -67,13 +70,8 @@ teardown() {
 }
 
 @test "install_librewolf creates repo file, copies firefox profile, and writes profile.ini" {
-  # Make sure DNF log will be created by touching it before running
+  # Make sure DNF log will be created inside the test dir
   touch "$BATS_TEST_TMPDIR/sudo dnf.log"
-  
-  # Debug what environment variables we have
-  echo "firefox_profile=$firefox_profile" >&3
-  echo "librewolf_dir=$librewolf_dir" >&3
-  echo "PROFILE=$PROFILE" >&3
   
   run install_librewolf
 
@@ -83,10 +81,6 @@ teardown() {
   # Check that the sudo dnf mock ran and logged properly
   [ -f "$BATS_TEST_TMPDIR/sudo dnf.log" ]
   grep -q "install -y librewolf" "$BATS_TEST_TMPDIR/sudo dnf.log"
-
-  # Debug the librewolf directory contents
-  echo "LibreWolf dir contents:" >&3
-  ls -la "$librewolf_dir" >&3
   
   # Verify that the Firefox profile (represented by the dummy file) was copied.
   [ -d "$librewolf_dir/$PROFILE" ]
@@ -109,4 +103,56 @@ teardown() {
 
   # Verify that the file now contains the additional parameter.
   grep -q -- "--password-store=basic" "$desktop_file"
+}
+
+@test "install_auto_cpufreq clones repository and runs installer successfully" {
+  # Ensure git.log doesn't exist
+  rm -f "$BATS_TEST_TMPDIR/git.log"
+  
+  # Run the function
+  run install_auto_cpufreq
+  
+  # Check that the function succeeded
+  [ "$status" -eq 0 ]
+  [ -f "$BATS_TEST_TMPDIR/git.log" ]
+  
+  # Check that git clone was called with the correct parameters
+  grep -q "git clone https://github.com/AdnanHodzic/auto-cpufreq.git" "$BATS_TEST_TMPDIR/git.log"
+  
+  # Success message should be output
+  echo "$output" | grep -q "auto-cpufreq installation completed"
+}
+
+@test "install_auto_cpufreq handles git clone failure" {
+  # Set environment variable to make git mock fail
+  export FAIL_GIT_CLONE=true
+  
+  # Run the function
+  run install_auto_cpufreq
+  
+  # Check that the function failed
+  [ "$status" -eq 1 ]
+  
+  # Error message should be output
+  echo "$output" | grep -q "Failed to clone auto-cpufreq repository"
+  
+  # Reset the environment variable
+  unset FAIL_GIT_CLONE
+}
+
+@test "install_auto_cpufreq handles installer failure" {
+  # Set environment variable to make installer mock fail
+  export INSTALLER_EXIT_CODE=1
+  
+  # Run the function
+  run install_auto_cpufreq
+  
+  # Check that the function failed
+  [ "$status" -eq 1 ]
+  
+  # Error message should be output
+  echo "$output" | grep -q "auto-cpufreq installation failed"
+  
+  # Reset the environment variable
+  unset INSTALLER_EXIT_CODE
 }

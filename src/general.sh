@@ -267,115 +267,85 @@ switch_lightdm() {
   log_info "Display manager switched to LightDM."
 }
 
+# Configuration file modification function for lightdm autologin
+# This function modifies the lightdm configuration file to enable autologin
 lightdm_autologin() {
-  log_info "Setting up LightDM autologin for user $USER..."
-
   local conf_file="/etc/lightdm/lightdm.conf"
-
-  # Create backup of original file if it exists and no backup exists yet
-  if [[ -f "$conf_file" && ! -f "${conf_file}.bak" ]]; then
-    log_debug "Creating backup of LightDM configuration..."
-    if ! sudo cp "$conf_file" "${conf_file}.bak"; then
-      log_warn "Failed to create backup of LightDM configuration"
-    else
-      log_debug "LightDM configuration backup created at ${conf_file}.bak"
-    fi
-  fi
-
-  # Read existing content (if any) to preserve settings
-  local existing_content=""
-  if [[ -f "$conf_file" ]]; then
-    existing_content=$(sudo cat "$conf_file" 2>/dev/null)
-  fi
-
-  # Check if [Seat:*] section exists
-  local seat_section_exists=false
-  if echo "$existing_content" | grep -q '^\[Seat:\*\]'; then
-    seat_section_exists=true
-    log_debug "Found existing [Seat:*] section in LightDM configuration"
-  fi
-
-  # Prepare new content
-  local new_content=""
-  if $seat_section_exists; then
-    # Replace content within the [Seat:*] section
-    new_content=$(echo "$existing_content" | awk '
-      BEGIN {in_seat = 0}
-      /^\[Seat:\*\]/ {in_seat = 1; print; next}
-      /^\[/ && in_seat {in_seat = 0; print; next}
-      in_seat && /^autologin-/ {next}  # Skip existing autologin settings
-      {print}
-    ')
-
-    # Find where to insert new settings
-    local insert_point=$(echo "$new_content" | grep -n '^\[Seat:\*\]' | cut -d: -f1)
-    if [[ -n "$insert_point" ]]; then
-      # Add autologin settings after the [Seat:*] line
-      new_content=$(echo "$new_content" | awk -v insert="$insert_point" '
-        NR == insert {
-          print
-          print "autologin-guest=false"
-          print "autologin-user='$USER'"
-          print "autologin-session='$SESSION'"
-          print "autologin-user-timeout=0"
-          print "autologin-in-background=false"
-          next
-        }
-        {print}
-      ')
-    fi
+  local user_name="${user:-$(whoami)}"
+  local hostname
+  
+  hostname=$(hostname 2>/dev/null || echo "unknown")
+  local session_value
+  
+  # Determine which session to use based on system type
+  if [[ "$hostname" == "$hostname_desktop" ]]; then
+    session_value="${desktop_session:-qtile}"
+  elif [[ "$hostname" == "$hostname_laptop" ]]; then
+    session_value="${laptop_session:-hyprland}"
   else
-    # Create new content with [Seat:*] section
-    new_content="${existing_content}"
-    # Add an empty line if the file doesn't end with one
-    if [[ -n "$new_content" && ! "$new_content" =~ \n$ ]]; then
-      new_content="${new_content}\n"
-    fi
-
-    # Add new section
-    new_content="${new_content}\n[Seat:*]\n"
-    new_content="${new_content}autologin-guest=false\n"
-    new_content="${new_content}autologin-user=$USER\n"
-    new_content="${new_content}autologin-session=$SESSION\n"
-    new_content="${new_content}autologin-user-timeout=0\n"
-    new_content="${new_content}autologin-in-background=false\n"
+    session_value="qtile"  # Default if hostname doesn't match known types
   fi
 
-  # Write updated config file using sudo tee
-  log_debug "Writing new LightDM configuration..."
-  if ! echo -e "$new_content" | sudo tee "$conf_file" >/dev/null; then
-    log_error "Failed to write LightDM configuration"
+  log_info "Setting up LightDM autologin for user $user_name with session $session_value"
+
+  # Check if lightdm.conf exists
+  if [[ ! -f "$conf_file" ]]; then
+    log_error "LightDM configuration file not found: $conf_file"
     return 1
   fi
 
-  # Set proper file permissions
-  sudo chmod 644 "$conf_file"
-
-  # Setup PAM configuration for LightDM
-  local pam_lightdm="/etc/pam.d/lightdm"
-
-  # Make a backup of the original file if it doesn't exist
-  if [[ -f "$pam_lightdm" && ! -f "${pam_lightdm}.bak" ]]; then
-    log_debug "Creating backup of LightDM PAM configuration..."
-    if ! sudo cp "$pam_lightdm" "${pam_lightdm}.bak"; then
-      log_warn "Failed to create backup of LightDM PAM configuration"
-    else
-      log_debug "LightDM PAM configuration backup created at ${pam_lightdm}.bak"
-    fi
+  # Create a backup of the original config
+  if [[ ! -f "${conf_file}.bak" ]]; then
+    sudo cp "$conf_file" "${conf_file}.bak"
   fi
 
-  log_info "Setting up PAM configuration for LightDM autologin..."
+  # Read the content of the file
+  local content
+  content=$(sudo cat "$conf_file")
 
-  # Check if the required lines exist, if not add them
-  if ! sudo grep -q 'auth\s\+sufficient\s\+pam_succeed_if.so user ingroup autologin' "$pam_lightdm"; then
-    echo 'auth        sufficient  pam_succeed_if.so user ingroup autologin' | sudo tee -a "$pam_lightdm" >/dev/null
+  # Check if the file contains the [Seat:*] section
+  if echo "$content" | grep -q '\[Seat:\*\]'; then
+    # Modify the existing configuration
+    log_info "Modifying existing LightDM configuration..."
+    local new_content
+    new_content=$(echo "$content" | awk -v user="$user_name" -v session="$session_value" '
+      BEGIN { in_seat = 0; autologin_user_modified = 0; autologin_session_modified = 0; }
+      /^\[Seat:\*\]/ { in_seat = 1; print; next; }
+      /^\[/ { in_seat = 0; print; next; }
+      in_seat && /^#?autologin-user=/ { 
+        print "autologin-user=" user; 
+        autologin_user_modified = 1; 
+        next; 
+      }
+      in_seat && /^#?autologin-session=/ { 
+        print "autologin-session='" session "'"; 
+        autologin_session_modified = 1; 
+        next; 
+      }
+      { print }
+      END {
+        if (in_seat) {
+          if (!autologin_user_modified) print "autologin-user=" user;
+          if (!autologin_session_modified) print "autologin-session='" session "'";
+        }
+      }
+    ')
+
+    # Write the new content to the file
+    echo "$new_content" | sudo tee "$conf_file" > /dev/null
+  else
+    # Add the [Seat:*] section with autologin enabled
+    log_info "Adding new LightDM autologin configuration..."
+    local new_content="${content}\n\n[Seat:*]\n"
+    new_content="${new_content}autologin-user=$user_name\n"
+    new_content="${new_content}autologin-session=$session_value\n"
+
+    # Write the new content to the file
+    echo -e "$new_content" | sudo tee "$conf_file" > /dev/null
   fi
 
-  if ! sudo grep -q 'auth\s\+include\s\+system-login' "$pam_lightdm"; then
-    echo 'auth        include     system-login' | sudo tee -a "$pam_lightdm" >/dev/null
-  fi
-
-  log_info "LightDM autologin configuration completed successfully"
+  log_success "LightDM autologin configuration completed"
+  return 0
 }
 
 #TEST: Group for passwordless login
