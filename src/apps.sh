@@ -368,7 +368,9 @@ install_auto_cpufreq() {
     return 1
   }
 
-  if ! sudo ./auto-cpufreq-installer; then
+  # Pipe "I" into the installer to automatically select the Install option,
+  # allowing the installer to proceed without manual intervention.
+  if ! echo "I" | sudo ./auto-cpufreq-installer; then
     log_error "auto-cpufreq installation failed"
     cd - > /dev/null || true
     return 1

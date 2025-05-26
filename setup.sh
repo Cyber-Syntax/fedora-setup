@@ -189,6 +189,7 @@ install_system_specific_packages() {
         echo "Warning: Failed to install package $pkg" >&2
       fi
     done
+  log_debug "auto_cpufreq_option value: $auto_cpufreq_option"
   fi
 
   echo "${system_type^} packages installation completed."
@@ -472,6 +473,7 @@ main() {
     [[ "$hyprland_option" == "false" ]] &&
     [[ "$sddm_option" == "false" ]] &&
     [[ "$sddm_autologin_option" == "false" ]] &&
+    [[ "$auto_cpufreq_option" == "false" ]] &&
     [[ "$setup_default_applications_option" == "false" ]]; then
     log_warn "No options specified"
     usage

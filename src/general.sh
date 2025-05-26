@@ -17,12 +17,12 @@ speed_up_dnf() {
     fi
   fi
   # 250K = 0.25MB/s
+  #NOTE: minrate is cause issue on mirrors.
   #TODO: make .conf file and copy
   local settings=(
     "max_parallel_downloads=20"
     "pkg_gpgcheck=True"
     "skip_if_unavailable=True"
-    "minrate=250k"
     "timeout=15"
     "retries=5"
   )
@@ -273,17 +273,17 @@ lightdm_autologin() {
   local conf_file="/etc/lightdm/lightdm.conf"
   local user_name="${user:-$(whoami)}"
   local hostname
-  
+
   hostname=$(hostname 2>/dev/null || echo "unknown")
   local session_value
-  
+
   # Determine which session to use based on system type
   if [[ "$hostname" == "$hostname_desktop" ]]; then
     session_value="${desktop_session:-qtile}"
   elif [[ "$hostname" == "$hostname_laptop" ]]; then
     session_value="${laptop_session:-hyprland}"
   else
-    session_value="qtile"  # Default if hostname doesn't match known types
+    session_value="qtile" # Default if hostname doesn't match known types
   fi
 
   log_info "Setting up LightDM autologin for user $user_name with session $session_value"
@@ -312,15 +312,15 @@ lightdm_autologin() {
       BEGIN { in_seat = 0; autologin_user_modified = 0; autologin_session_modified = 0; }
       /^\[Seat:\*\]/ { in_seat = 1; print; next; }
       /^\[/ { in_seat = 0; print; next; }
-      in_seat && /^#?autologin-user=/ { 
-        print "autologin-user=" user; 
-        autologin_user_modified = 1; 
-        next; 
+      in_seat && /^#?autologin-user=/ {
+        print "autologin-user=" user;
+        autologin_user_modified = 1;
+        next;
       }
-      in_seat && /^#?autologin-session=/ { 
-        print "autologin-session='" session "'"; 
-        autologin_session_modified = 1; 
-        next; 
+      in_seat && /^#?autologin-session=/ {
+        print "autologin-session='" session "'";
+        autologin_session_modified = 1;
+        next;
       }
       { print }
       END {
@@ -332,7 +332,7 @@ lightdm_autologin() {
     ')
 
     # Write the new content to the file
-    echo "$new_content" | sudo tee "$conf_file" > /dev/null
+    echo "$new_content" | sudo tee "$conf_file" >/dev/null
   else
     # Add the [Seat:*] section with autologin enabled
     log_info "Adding new LightDM autologin configuration..."
@@ -341,7 +341,7 @@ lightdm_autologin() {
     new_content="${new_content}autologin-session=$session_value\n"
 
     # Write the new content to the file
-    echo -e "$new_content" | sudo tee "$conf_file" > /dev/null
+    echo -e "$new_content" | sudo tee "$conf_file" >/dev/null
   fi
 
   log_success "LightDM autologin configuration completed"
@@ -487,31 +487,31 @@ app_name_to_desktop_file() {
     # Common application name mappings
     #TODO: need better way to handle this
     case "$app_name" in
-      "brave")
-        desktop_file="brave-browser.desktop"
-        ;;
-      "chrome" | "google-chrome" | "googlechrome")
-        desktop_file="google-chrome.desktop"
-        ;;
-      "firefox-esr")
-        desktop_file="firefox-esr.desktop"
-        ;;
-      "vscode" | "code")
-        desktop_file="code.desktop"
-        ;;
-      "librewolf")
-        desktop_file="librewolf.desktop"
-        ;;
-      "chromium")
-        desktop_file="chromium-browser.desktop"
-        ;;
-      "obsidian")
-        desktop_file="obsidian.desktop"
-        ;;
-      *)
-        # For standard applications, just append .desktop
-        desktop_file="${app_name}.desktop"
-        ;;
+    "brave")
+      desktop_file="brave-browser.desktop"
+      ;;
+    "chrome" | "google-chrome" | "googlechrome")
+      desktop_file="google-chrome.desktop"
+      ;;
+    "firefox-esr")
+      desktop_file="firefox-esr.desktop"
+      ;;
+    "vscode" | "code")
+      desktop_file="code.desktop"
+      ;;
+    "librewolf")
+      desktop_file="librewolf.desktop"
+      ;;
+    "chromium")
+      desktop_file="chromium-browser.desktop"
+      ;;
+    "obsidian")
+      desktop_file="obsidian.desktop"
+      ;;
+    *)
+      # For standard applications, just append .desktop
+      desktop_file="${app_name}.desktop"
+      ;;
     esac
   fi
 
