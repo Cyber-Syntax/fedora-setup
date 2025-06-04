@@ -21,8 +21,26 @@ LOG_FILE=""
 MAX_LOG_SIZE=$((3 * 1024 * 1024)) # 3MB in bytes
 MAX_BACKUPS=3
 
+# Process-specific guard to prevent duplicate console messages
+LOGGING_CONSOLE_SHOWN_FILE="/tmp/fedora-setup-logging-$$"
+
+# Cleanup function for temporary files
+cleanup_logging() {
+  if [[ -f "$LOGGING_CONSOLE_SHOWN_FILE" ]]; then
+    rm -f "$LOGGING_CONSOLE_SHOWN_FILE" 2>/dev/null
+  fi
+}
+
+# Set trap to cleanup on exit
+trap cleanup_logging EXIT
+
 # Initialize logging
 init_logging() {
+  # Skip if log file is already set up and valid
+  if [[ -n "$LOG_FILE" && -f "$LOG_FILE" && -w "$LOG_FILE" ]]; then
+    return 0
+  fi
+
   # Use the XDG base directory for logs
   LOG_DIR="${LOG_DIR:-$DEFAULT_LOG_DIR}"
 
@@ -106,7 +124,11 @@ init_logging() {
   # Initialize logging before first use
   if [[ -n "$LOG_FILE" ]]; then
     echo "[$(date +"%Y-%m-%d %H:%M:%S")] [INFO] Logging initialized to $LOG_FILE" >>"$LOG_FILE"
-    echo "Logging to: $LOG_FILE"
+    # Only show console message once per process session
+    if [[ ! -f "$LOGGING_CONSOLE_SHOWN_FILE" ]]; then
+      echo "Logging to: $LOG_FILE"
+      touch "$LOGGING_CONSOLE_SHOWN_FILE" 2>/dev/null || true
+    fi
   else
     echo "WARNING: File logging disabled due to permission issues"
   fi
@@ -166,10 +188,8 @@ _log() {
   if [[ -z "$LOG_FILE" ]]; then
     # If LOG_FILE is not set, initialize logging
     init_logging || {
-      # If initialization fails, we'll only log to console
+      # If initialization fails, we'll only log warnings and errors to console
       case "$_level" in
-        "DEBUG") [[ $LOG_LEVEL -le $LOG_LEVEL_DEBUG ]] && echo -e "\033[36m[DEBUG]\033[0m $_msg" ;;
-        "INFO") [[ $LOG_LEVEL -le $LOG_LEVEL_INFO ]] && echo -e "\033[32m[INFO]\033[0m $_msg" ;;
         "WARN") [[ $LOG_LEVEL -le $LOG_LEVEL_WARN ]] && echo -e "\033[33m[WARN]\033[0m $_msg" ;;
         "ERROR") [[ $LOG_LEVEL -le $LOG_LEVEL_ERROR ]] && echo -e "\033[31m[ERROR]\033[0m $_msg" >&2 ;;
       esac
@@ -183,10 +203,8 @@ _log() {
     echo "[$_timestamp] [$_level] $_msg" >>"$LOG_FILE" 2>/dev/null
   fi
 
-  # Log to console with color based on level
+  # Log to console with color based on level - only show warnings and errors
   case "$_level" in
-    "DEBUG") [[ $LOG_LEVEL -le $LOG_LEVEL_DEBUG ]] && echo -e "\033[36m[DEBUG]\033[0m $_msg" ;;
-    "INFO") [[ $LOG_LEVEL -le $LOG_LEVEL_INFO ]] && echo -e "\033[32m[INFO]\033[0m $_msg" ;;
     "WARN") [[ $LOG_LEVEL -le $LOG_LEVEL_WARN ]] && echo -e "\033[33m[WARN]\033[0m $_msg" ;;
     "ERROR") [[ $LOG_LEVEL -le $LOG_LEVEL_ERROR ]] && echo -e "\033[31m[ERROR]\033[0m $_msg" >&2 ;;
   esac
@@ -194,11 +212,11 @@ _log() {
 
 # Public logging functions
 log_debug() {
-  _log "DEBUG" "$1" || echo "[DEBUG] $1"
+  _log "DEBUG" "$1"
 }
 
 log_info() {
-  _log "INFO" "$1" || echo "[INFO] $1"
+  _log "INFO" "$1"
 }
 
 log_warn() {
@@ -206,12 +224,12 @@ log_warn() {
 }
 
 log_error() {
-  _log "ERROR" "$1" || echo "[ERROR] $1" >&2
+  _log "ERROR" "$1"
 }
 
 # Add a success log level function
 log_success() {
-  _log "INFO" "$1" || echo "[SUCCESS] $1"
+  _log "INFO" "$1"
   echo -e "\033[32m[SUCCESS]\033[0m $1"
 }
 
