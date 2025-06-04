@@ -1,0 +1,80 @@
+{
+  "core": [
+    "curl",
+    "wget",
+    "ufw",
+    "trash-cli",
+    "syncthing",
+    "borgbackup",
+    "flatpak"
+  ],
+  "apps": [
+    "seahorse",
+    "xournalpp",
+    "kitty",
+    "keepassxc",
+    "neovim",
+    "vim",
+    "pavucontrol",
+    "chromium"
+  ],
+  "dev": [
+    "papirus-icon-theme",
+    "git-credential-libsecret",
+    "gh",
+    "ruff",
+    "lm_sensors",
+    "htop",
+    "btop",
+    "pip",
+    "zoxide",
+    "fzf",
+    "bat",
+    "eza",
+    "fd-find",
+    "zsh-autosuggestions",
+    "zsh-syntax-highlighting",
+    "zsh",
+    "luarocks",
+    "cargo",
+    "yarnpkg",
+    "bash-language-server",
+    "python3-devel",
+    "dbus-devel",
+    "shfmt",
+    "ShellCheck"
+  ],
+  "desktop": [
+    "virt-manager",
+    "libvirt",
+    "nvidia-open",
+    "lightdm",
+    "sysbench",
+    "ckb-next",
+    "solaar"
+  ],
+  "laptop": ["powertop", "thinkfan", "acpi"],
+  "qtile": [
+    "xset",
+    "feh",
+    "picom",
+    "i3lock",
+    "rofi",
+    "qtile-extras",
+    "lxappearance",
+    "gammastep",
+    "numlockx",
+    "dunst",
+    "flameshot",
+    "playerctl",
+    "xev"
+  ],
+  "flatpak": [
+    "org.signal.Signal",
+    "io.github.martchus.syncthingtray",
+    "com.tutanota.Tutanota",
+    "com.zed.Zed",
+    "md.obsidian.Obsidian",
+    "com.spotify.Client"
+  ]
+}

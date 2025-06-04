@@ -13,8 +13,14 @@ IFS=$'\n\t'
 # Setup XDG Base Directory paths if not already set
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 
+# Source required modules
 source src/logging.sh
 source src/config.sh
+
+# Initialize configuration and load variables
+init_config
+
+# Source remaining modules after config initialization
 source src/general.sh
 source src/apps.sh
 source src/desktop.sh
@@ -52,6 +58,12 @@ NOTE: Below options consider safe to use but still be careful.
   -x    Swap ffmpeg-free with ffmpeg.
   -A    Install application packages.
   -D    Install development packages.
+  -C    Install Visual Studio Code.
+  -M    Set up default applications using mimeapps.list.
+  -E    Install auto-cpufreq for automatic CPU frequency management.
+  -H    Install Hyprland Wayland compositor and dependencies.
+  -S    Switch to SDDM display manager (recommended for Hyprland).
+  -X    Configure SDDM autologin (automatically log in after boot).
 
 Experimental: Below functions are need to tested with caution.
   -a    Execute all functions. (NOTE:System detection handled by hostname)
@@ -62,6 +74,7 @@ Experimental: Below functions are need to tested with caution.
   -z    Setup zenpower for Ryzen 5000 series
   -n    Install NVIDIA CUDA
   -N    Switch to nvidia-open drivers
+  -j    Setup nfancurve script for NVIDIA GPUs.
   -v    Setup VA-API for NVIDIA RTX series
   -p    Install ProtonVPN repository and enable OpenVPN for SELinux
   -o    Install Ollama with its install.sh script
@@ -84,14 +97,18 @@ detect_system_type() {
 
   log_debug "Detected hostname: $hostname"
 
-  if [[ "$hostname" == "$hostname_desktop" ]]; then
+  # Ensure hostname variables are defined, use safe defaults if not
+  local desktop_hostname="${hostname_desktop:-desktop}"
+  local laptop_hostname="${hostname_laptop:-laptop}"
+
+  if [[ "$hostname" == "$desktop_hostname" ]]; then
     detected_type="desktop"
-  elif [[ "$hostname" == "$hostname_laptop" ]]; then
+  elif [[ "$hostname" == "$laptop_hostname" ]]; then
     detected_type="laptop"
   else
     log_error "Unknown hostname '$hostname'. Expected:"
-    log_error "Desktop: $hostname_desktop"
-    log_error "Laptop:  $hostname_laptop"
+    log_error "Desktop: $desktop_hostname"
+    log_error "Laptop:  $laptop_hostname"
     exit 1
   fi
 
@@ -122,6 +139,9 @@ needs_dnf_speedup() {
     $vaapi_option ||
     $swap_ffmpeg_option ||
     $protonvpn_option ||
+    $hyprland_option ||
+    $sddm_option ||
+    $sddm_autologin_option ||
     $ollama_option; then
     return 0 # true in bash
   fi
@@ -170,6 +190,7 @@ install_system_specific_packages() {
         echo "Warning: Failed to install package $pkg" >&2
       fi
     done
+  log_debug "auto_cpufreq_option value: $auto_cpufreq_option"
   fi
 
   echo "${system_type^} packages installation completed."
@@ -252,6 +273,77 @@ mirror_country_change() {
   # also need to commeent the baseurl
 }
 
+# Function: switch_to_sddm
+# Purpose: Switches the display manager to SDDM and optionally configures autologin
+switch_to_sddm() {
+  log_info "Switching to SDDM display manager..."
+
+  # Check if SDDM is installed
+  if ! rpm -q sddm &>/dev/null; then
+    log_info "SDDM not found. Installing SDDM..."
+    if ! sudo dnf install -y sddm; then
+      log_error "Failed to install SDDM"
+      return 1
+    fi
+  fi
+
+  # Check if user is running in a graphical environment
+  # Using ${VAR:-} syntax to handle unbound variables safely
+  if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    log_warn "IMPORTANT: You appear to be running a graphical session."
+    log_warn "It is STRONGLY RECOMMENDED to switch display managers from a TTY console."
+    log_warn "Please follow these steps:"
+    log_warn "1. Press Ctrl+Alt+F3 to switch to a TTY console"
+    log_warn "2. Log in with your username and password"
+    log_warn "3. Run this script with: sudo ./setup.sh -S"
+    log_warn "4. After switching to SDDM, reboot with: sudo systemctl reboot"
+
+    read -p "Continue anyway? This may cause your session to crash! [y/N] " -r
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      log_info "Operation cancelled. Please run this from a TTY console."
+      return 1
+    fi
+  fi
+
+  # Find and disable the current display manager
+  local current_dm
+  current_dm=$(systemctl list-units --type=service --state=active | grep -E 'gdm|lightdm|lxdm|xdm' | awk '{print $1}')
+
+  if [[ -n "$current_dm" ]]; then
+    log_info "Disabling current display manager: $current_dm"
+    if ! sudo systemctl disable --now "$current_dm"; then
+      log_warn "Failed to disable current display manager: $current_dm"
+    fi
+  fi
+
+  # Enable SDDM
+  log_info "Enabling SDDM service..."
+  if ! sudo systemctl enable --now sddm.service; then
+    log_error "Failed to enable SDDM service"
+    return 1
+  fi
+
+  # Ask user if they want to configure SDDM autologin
+  read -p "Would you like to configure SDDM autologin? This will automatically log in after boot. [y/N] " -r
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Call the sddm_autologin function from apps.sh
+    if ! sddm_autologin; then
+      log_error "Failed to configure SDDM autologin"
+      # Continue despite autologin failure
+      log_info "Continuing with SDDM setup without autologin"
+    fi
+  else
+    log_info "Skipping SDDM autologin configuration"
+  fi
+
+  log_success "SDDM is now set as the default display manager."
+  log_info "To select your session, choose it from the SDDM session menu at login."
+  log_info "You should reboot your system for the changes to take effect:"
+  log_info "  sudo systemctl reboot"
+
+  return 0
+}
+
 main() {
   # Show help message if no arguments are provided or if -h is passed.
   if [[ "$#" -eq 1 && "$1" == "-h" ]]; then
@@ -279,6 +371,9 @@ main() {
   trash_cli_option=false
   borgbackup_option=false
   syncthing_option=false
+  auto_cpufreq_option=false
+  hyprland_option=false
+  sddm_option=false
 
   # New experimental option flags.
   ufw_option=false
@@ -294,9 +389,13 @@ main() {
   protonvpn_option=false
   update_system_option=false
   virt_option=false
+  install_vscode_option=false
+  setup_default_applications_option=false
+  sddm_autologin_option=false
+  nfancurve_option=false
 
   # Process command-line options.
-  while getopts "abBcdDFfghIiAalLnNopPrstTuUvVzqQx" opt; do
+  while getopts "abBcdDEFfghHIiAalLjnNopPrstTuUvVzqQxCMSX" opt; do
     case $opt in
       a) all_option=true ;;
       A) install_app_packages_option=true ;;
@@ -304,9 +403,12 @@ main() {
       b) brave_option=true ;;
       B) borgbackup_option=true ;;
       c) touchpad_option=true ;;
+      H) hyprland_option=true ;;
       i) install_core_packages_option=true ;;
       I) install_system_specific_packages_option=true ;;
       s) syncthing_option=true ;;
+      S) sddm_option=true ;;
+      X) sddm_autologin_option=true ;;
       d) dnf_speed_option=true ;;
       V) virt_option=true ;;
       F) flatpak_option=true ;;
@@ -329,6 +431,10 @@ main() {
       u) update_system_option=true ;;
       U) ufw_option=true ;;
       z) zenpower_option=true ;;
+      C) install_vscode_option=true ;;
+      M) setup_default_applications_option=true ;;
+      E) auto_cpufreq_option=true ;;
+      j) nfancurve_option=true ;;
       h) usage ;;
       *) usage ;;
     esac
@@ -365,7 +471,14 @@ main() {
     [[ "$protonvpn_option" == "false" ]] &&
     [[ "$ufw_option" == "false" ]] &&
     [[ "$update_system_option" == "false" ]] &&
-    [[ "$virt_option" == "false" ]]; then
+    [[ "$virt_option" == "false" ]] &&
+    [[ "$install_vscode_option" == "false" ]] &&
+    [[ "$hyprland_option" == "false" ]] &&
+    [[ "$sddm_option" == "false" ]] &&
+    [[ "$sddm_autologin_option" == "false" ]] &&
+    [[ "$auto_cpufreq_option" == "false" ]] &&
+    [[ "$setup_default_applications_option" == "false" ]] &&
+    [[ "$nfancurve_option" == "false" ]]; then
     log_warn "No options specified"
     usage
   fi
@@ -425,6 +538,7 @@ main() {
       nvidia_cuda_setup
       vaapi_setup
       borgbackup_setup
+      nfancurve_setup
       # zenpower_setup #WARN: is it safe?
     fi
 
@@ -446,6 +560,7 @@ main() {
     install_lazygit
     install_protonvpn
     install_flatpak_packages
+    setup_default_applications
 
   else
     log_info "Executing selected additional functions..."
@@ -479,6 +594,13 @@ main() {
     if $protonvpn_option; then install_protonvpn; fi
     if $update_system_option; then system_updates; fi
     if $virt_option; then virt_manager_setup; fi
+    if $install_vscode_option; then install_vscode; fi
+    if $setup_default_applications_option; then setup_default_applications; fi
+    if $auto_cpufreq_option; then install_auto_cpufreq; fi
+    if $hyprland_option; then install_hyprland; fi
+    if $sddm_option; then switch_to_sddm; fi
+    if $sddm_autologin_option; then sddm_autologin; fi
+    if $nfancurve_option; then nfancurve_setup; fi
   fi
 
   log_info "Script execution completed."

@@ -17,12 +17,12 @@ speed_up_dnf() {
     fi
   fi
   # 250K = 0.25MB/s
+  #NOTE: minrate is cause issue on mirrors.
   #TODO: make .conf file and copy
   local settings=(
     "max_parallel_downloads=20"
     "pkg_gpgcheck=True"
     "skip_if_unavailable=True"
-    "minrate=250k"
     "timeout=15"
     "retries=5"
   )
@@ -267,115 +267,85 @@ switch_lightdm() {
   log_info "Display manager switched to LightDM."
 }
 
+# Configuration file modification function for lightdm autologin
+# This function modifies the lightdm configuration file to enable autologin
 lightdm_autologin() {
-  log_info "Setting up LightDM autologin for user $USER..."
-
   local conf_file="/etc/lightdm/lightdm.conf"
+  local user_name="${user:-$(whoami)}"
+  local hostname
 
-  # Create backup of original file if it exists and no backup exists yet
-  if [[ -f "$conf_file" && ! -f "${conf_file}.bak" ]]; then
-    log_debug "Creating backup of LightDM configuration..."
-    if ! sudo cp "$conf_file" "${conf_file}.bak"; then
-      log_warn "Failed to create backup of LightDM configuration"
-    else
-      log_debug "LightDM configuration backup created at ${conf_file}.bak"
-    fi
-  fi
+  hostname=$(hostname 2>/dev/null || echo "unknown")
+  local session_value
 
-  # Read existing content (if any) to preserve settings
-  local existing_content=""
-  if [[ -f "$conf_file" ]]; then
-    existing_content=$(sudo cat "$conf_file" 2>/dev/null)
-  fi
-
-  # Check if [Seat:*] section exists
-  local seat_section_exists=false
-  if echo "$existing_content" | grep -q '^\[Seat:\*\]'; then
-    seat_section_exists=true
-    log_debug "Found existing [Seat:*] section in LightDM configuration"
-  fi
-
-  # Prepare new content
-  local new_content=""
-  if $seat_section_exists; then
-    # Replace content within the [Seat:*] section
-    new_content=$(echo "$existing_content" | awk '
-      BEGIN {in_seat = 0}
-      /^\[Seat:\*\]/ {in_seat = 1; print; next}
-      /^\[/ && in_seat {in_seat = 0; print; next}
-      in_seat && /^autologin-/ {next}  # Skip existing autologin settings
-      {print}
-    ')
-
-    # Find where to insert new settings
-    local insert_point=$(echo "$new_content" | grep -n '^\[Seat:\*\]' | cut -d: -f1)
-    if [[ -n "$insert_point" ]]; then
-      # Add autologin settings after the [Seat:*] line
-      new_content=$(echo "$new_content" | awk -v insert="$insert_point" '
-        NR == insert {
-          print
-          print "autologin-guest=false"
-          print "autologin-user='$USER'"
-          print "autologin-session='$SESSION'"
-          print "autologin-user-timeout=0"
-          print "autologin-in-background=false"
-          next
-        }
-        {print}
-      ')
-    fi
+  # Determine which session to use based on system type
+  if [[ "$hostname" == "$hostname_desktop" ]]; then
+    session_value="${desktop_session:-qtile}"
+  elif [[ "$hostname" == "$hostname_laptop" ]]; then
+    session_value="${laptop_session:-hyprland}"
   else
-    # Create new content with [Seat:*] section
-    new_content="${existing_content}"
-    # Add an empty line if the file doesn't end with one
-    if [[ -n "$new_content" && ! "$new_content" =~ \n$ ]]; then
-      new_content="${new_content}\n"
-    fi
-
-    # Add new section
-    new_content="${new_content}\n[Seat:*]\n"
-    new_content="${new_content}autologin-guest=false\n"
-    new_content="${new_content}autologin-user=$USER\n"
-    new_content="${new_content}autologin-session=$SESSION\n"
-    new_content="${new_content}autologin-user-timeout=0\n"
-    new_content="${new_content}autologin-in-background=false\n"
+    session_value="qtile" # Default if hostname doesn't match known types
   fi
 
-  # Write updated config file using sudo tee
-  log_debug "Writing new LightDM configuration..."
-  if ! echo -e "$new_content" | sudo tee "$conf_file" >/dev/null; then
-    log_error "Failed to write LightDM configuration"
+  log_info "Setting up LightDM autologin for user $user_name with session $session_value"
+
+  # Check if lightdm.conf exists
+  if [[ ! -f "$conf_file" ]]; then
+    log_error "LightDM configuration file not found: $conf_file"
     return 1
   fi
 
-  # Set proper file permissions
-  sudo chmod 644 "$conf_file"
-
-  # Setup PAM configuration for LightDM
-  local pam_lightdm="/etc/pam.d/lightdm"
-
-  # Make a backup of the original file if it doesn't exist
-  if [[ -f "$pam_lightdm" && ! -f "${pam_lightdm}.bak" ]]; then
-    log_debug "Creating backup of LightDM PAM configuration..."
-    if ! sudo cp "$pam_lightdm" "${pam_lightdm}.bak"; then
-      log_warn "Failed to create backup of LightDM PAM configuration"
-    else
-      log_debug "LightDM PAM configuration backup created at ${pam_lightdm}.bak"
-    fi
+  # Create a backup of the original config
+  if [[ ! -f "${conf_file}.bak" ]]; then
+    sudo cp "$conf_file" "${conf_file}.bak"
   fi
 
-  log_info "Setting up PAM configuration for LightDM autologin..."
+  # Read the content of the file
+  local content
+  content=$(sudo cat "$conf_file")
 
-  # Check if the required lines exist, if not add them
-  if ! sudo grep -q 'auth\s\+sufficient\s\+pam_succeed_if.so user ingroup autologin' "$pam_lightdm"; then
-    echo 'auth        sufficient  pam_succeed_if.so user ingroup autologin' | sudo tee -a "$pam_lightdm" >/dev/null
+  # Check if the file contains the [Seat:*] section
+  if echo "$content" | grep -q '\[Seat:\*\]'; then
+    # Modify the existing configuration
+    log_info "Modifying existing LightDM configuration..."
+    local new_content
+    new_content=$(echo "$content" | awk -v user="$user_name" -v session="$session_value" '
+      BEGIN { in_seat = 0; autologin_user_modified = 0; autologin_session_modified = 0; }
+      /^\[Seat:\*\]/ { in_seat = 1; print; next; }
+      /^\[/ { in_seat = 0; print; next; }
+      in_seat && /^#?autologin-user=/ {
+        print "autologin-user=" user;
+        autologin_user_modified = 1;
+        next;
+      }
+      in_seat && /^#?autologin-session=/ {
+        print "autologin-session='" session "'";
+        autologin_session_modified = 1;
+        next;
+      }
+      { print }
+      END {
+        if (in_seat) {
+          if (!autologin_user_modified) print "autologin-user=" user;
+          if (!autologin_session_modified) print "autologin-session='" session "'";
+        }
+      }
+    ')
+
+    # Write the new content to the file
+    echo "$new_content" | sudo tee "$conf_file" >/dev/null
+  else
+    # Add the [Seat:*] section with autologin enabled
+    log_info "Adding new LightDM autologin configuration..."
+    local new_content="${content}\n\n[Seat:*]\n"
+    new_content="${new_content}autologin-user=$user_name\n"
+    new_content="${new_content}autologin-session=$session_value\n"
+
+    # Write the new content to the file
+    echo -e "$new_content" | sudo tee "$conf_file" >/dev/null
   fi
 
-  if ! sudo grep -q 'auth\s\+include\s\+system-login' "$pam_lightdm"; then
-    echo 'auth        include     system-login' | sudo tee -a "$pam_lightdm" >/dev/null
-  fi
-
-  log_info "LightDM autologin configuration completed successfully"
+  log_success "LightDM autologin configuration completed"
+  return 0
 }
 
 #TEST: Group for passwordless login
@@ -442,8 +412,6 @@ syncthing_setup() {
   log_info "Syncthing enabled successfully."
 }
 
-
-
 #TESTING:
 virt_manager_setup() {
   log_info "Setting up virtualization..."
@@ -503,4 +471,275 @@ virt_manager_setup() {
   fi
 
   log_info "Virtualization setup completed. You may need to log out and log back in for group membership changes to take effect."
+}
+
+# Helper function to convert application names to proper desktop file names
+# and verify if they exist on the system
+#TEST: Need to be improved
+app_name_to_desktop_file() {
+  local app_name="$1"
+  local desktop_file=""
+
+  # If app_name already ends with .desktop, use it as is
+  if [[ "$app_name" == *.desktop ]]; then
+    desktop_file="$app_name"
+  else
+    # Common application name mappings
+    #TODO: need better way to handle this
+    case "$app_name" in
+    "brave")
+      desktop_file="brave-browser.desktop"
+      ;;
+    "chrome" | "google-chrome" | "googlechrome")
+      desktop_file="google-chrome.desktop"
+      ;;
+    "firefox-esr")
+      desktop_file="firefox-esr.desktop"
+      ;;
+    "vscode" | "code")
+      desktop_file="code.desktop"
+      ;;
+    "librewolf")
+      desktop_file="librewolf.desktop"
+      ;;
+    "chromium")
+      desktop_file="chromium-browser.desktop"
+      ;;
+    "obsidian")
+      desktop_file="obsidian.desktop"
+      ;;
+    *)
+      # For standard applications, just append .desktop
+      desktop_file="${app_name}.desktop"
+      ;;
+    esac
+  fi
+
+  # Check if the desktop file exists in standard locations
+  local found=false
+  local search_paths=(
+    "/usr/share/applications"
+    "/usr/local/share/applications"
+    "${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  )
+
+  for path in "${search_paths[@]}"; do
+    if [[ -f "$path/$desktop_file" ]]; then
+      found=true
+      break
+    fi
+  done
+
+  if ! $found; then
+    log_warn "Desktop file '$desktop_file' not found. The application may not be installed."
+  fi
+
+  # Return the desktop file name regardless of whether it was found
+  # This allows the user's configuration to be written even if the app isn't installed yet
+  echo "$desktop_file"
+}
+
+# Creates or updates the mimeapps.list file to set default applications
+# based on user preferences stored in variables.json
+setup_default_applications() {
+  log_info "Setting up default applications with mimeapps.list..."
+
+  # Configuration file paths
+  local variables_file
+  variables_file=$(load_json_config "variables.json")
+
+  # Verify the variables file exists
+  if [[ -z "$variables_file" || ! -f "$variables_file" ]]; then
+    log_error "Failed to load variables configuration"
+    return 1
+  fi
+
+  # Get the user's home directory for creating mimeapps.list
+  local user_home
+  user_home=$(getent passwd "$USER" | cut -d: -f6)
+  local config_dir="${user_home}/.config"
+  local mimeapps_file="${config_dir}/mimeapps.list"
+
+  # Create backup if the file already exists
+  if [[ -f "$mimeapps_file" ]]; then
+    log_info "Creating backup of existing mimeapps.list..."
+    local backup_file="${mimeapps_file}.bak.$(date +%Y%m%d%H%M%S)"
+    if ! cp "$mimeapps_file" "$backup_file"; then
+      log_error "Failed to create backup of mimeapps.list"
+      return 1
+    fi
+    log_info "Backup created at $backup_file"
+  fi
+
+  # Make sure the config directory exists
+  mkdir -p "$config_dir"
+
+  # Load the default applications from variables.json
+  local browser_name
+  local terminal_name
+  local file_manager_name
+  local image_viewer_name
+  local text_editor_name
+
+  browser_name=$(parse_json "$variables_file" ".default_applications.browser")
+  terminal_name=$(parse_json "$variables_file" ".default_applications.terminal")
+  file_manager_name=$(parse_json "$variables_file" ".default_applications.file_manager")
+  image_viewer_name=$(parse_json "$variables_file" ".default_applications.image_viewer")
+  text_editor_name=$(parse_json "$variables_file" ".default_applications.text_editor")
+
+  # Convert application names to proper desktop file names
+  local browser=""
+  local terminal=""
+  local file_manager=""
+  local image_viewer=""
+  local text_editor=""
+
+  if [[ -n "$browser_name" ]]; then
+    browser=$(app_name_to_desktop_file "$browser_name")
+    log_debug "Browser '$browser_name' mapped to desktop file: $browser"
+  fi
+
+  if [[ -n "$terminal_name" ]]; then
+    terminal=$(app_name_to_desktop_file "$terminal_name")
+    log_debug "Terminal '$terminal_name' mapped to desktop file: $terminal"
+  fi
+
+  if [[ -n "$file_manager_name" ]]; then
+    file_manager=$(app_name_to_desktop_file "$file_manager_name")
+    log_debug "File manager '$file_manager_name' mapped to desktop file: $file_manager"
+  fi
+
+  if [[ -n "$image_viewer_name" ]]; then
+    image_viewer=$(app_name_to_desktop_file "$image_viewer_name")
+    log_debug "Image viewer '$image_viewer_name' mapped to desktop file: $image_viewer"
+  fi
+
+  if [[ -n "$text_editor_name" ]]; then
+    text_editor=$(app_name_to_desktop_file "$text_editor_name")
+    log_debug "Text editor '$text_editor_name' mapped to desktop file: $text_editor"
+  fi
+
+  # Define the default applications section of mimeapps.list
+  log_debug "Generating default applications section..."
+
+  local default_section="[Default Applications]\n"
+
+  # Process browser associations
+  if [[ -n "$browser" ]]; then
+    local browser_mimes
+    # Get browser mime types from variables.json as an array
+    mapfile -t browser_mimes < <(parse_json "$variables_file" ".mime_associations.browser[]")
+
+    for mime in "${browser_mimes[@]}"; do
+      default_section+="${mime}=${browser}\n"
+    done
+  fi
+
+  # Process image viewer associations
+  if [[ -n "$image_viewer" ]]; then
+    local image_mimes
+    mapfile -t image_mimes < <(parse_json "$variables_file" ".mime_associations.image_viewer[]")
+
+    for mime in "${image_mimes[@]}"; do
+      default_section+="${mime}=${image_viewer}\n"
+    done
+  fi
+
+  # Process text editor associations
+  if [[ -n "$text_editor" ]]; then
+    local text_mimes
+    mapfile -t text_mimes < <(parse_json "$variables_file" ".mime_associations.text_editor[]")
+
+    for mime in "${text_mimes[@]}"; do
+      default_section+="${mime}=${text_editor}\n"
+    done
+  fi
+
+  # Process file manager associations
+  if [[ -n "$file_manager" ]]; then
+    local file_mimes
+    mapfile -t file_mimes < <(parse_json "$variables_file" ".mime_associations.file_manager[]")
+
+    for mime in "${file_mimes[@]}"; do
+      default_section+="${mime}=${file_manager}\n"
+    done
+  fi
+
+  # Process terminal associations
+  if [[ -n "$terminal" ]]; then
+    local terminal_mimes
+    mapfile -t terminal_mimes < <(parse_json "$variables_file" ".mime_associations.terminal[]")
+
+    for mime in "${terminal_mimes[@]}"; do
+      default_section+="${mime}=${terminal}\n"
+    done
+  fi
+
+  # Define the Added Associations section - adding semicolons for proper formatting
+  log_debug "Generating added associations section..."
+
+  local added_section="\n[Added Associations]\n"
+
+  # Add browser associations
+  if [[ -n "$browser" ]]; then
+    local browser_mimes
+    mapfile -t browser_mimes < <(parse_json "$variables_file" ".mime_associations.browser[]")
+
+    for mime in "${browser_mimes[@]}"; do
+      added_section+="${mime}=${browser};\n"
+    done
+  fi
+
+  # Add image viewer associations
+  if [[ -n "$image_viewer" ]]; then
+    local image_mimes
+    mapfile -t image_mimes < <(parse_json "$variables_file" ".mime_associations.image_viewer[]")
+
+    for mime in "${image_mimes[@]}"; do
+      added_section+="${mime}=${image_viewer};\n"
+    done
+  fi
+
+  # Add text editor associations
+  if [[ -n "$text_editor" ]]; then
+    local text_mimes
+    mapfile -t text_mimes < <(parse_json "$variables_file" ".mime_associations.text_editor[]")
+
+    for mime in "${text_mimes[@]}"; do
+      added_section+="${mime}=${text_editor};\n"
+    done
+  fi
+
+  # Add file manager associations
+  if [[ -n "$file_manager" ]]; then
+    local file_mimes
+    mapfile -t file_mimes < <(parse_json "$variables_file" ".mime_associations.file_manager[]")
+
+    for mime in "${file_mimes[@]}"; do
+      added_section+="${mime}=${file_manager};\n"
+    done
+  fi
+
+  # Add terminal associations
+  if [[ -n "$terminal" ]]; then
+    local terminal_mimes
+    mapfile -t terminal_mimes < <(parse_json "$variables_file" ".mime_associations.terminal[]")
+
+    for mime in "${terminal_mimes[@]}"; do
+      added_section+="${mime}=${terminal};\n"
+    done
+  fi
+
+  # Combine everything into the final mimeapps.list content
+  local mimeapps_content="${default_section}${added_section}"
+
+  # Write the file
+  log_debug "Writing mimeapps.list to $mimeapps_file..."
+  if ! echo -e "$mimeapps_content" >"$mimeapps_file"; then
+    log_error "Failed to write mimeapps.list"
+    return 1
+  fi
+
+  log_info "Default applications configured successfully in $mimeapps_file"
+  return 0
 }

@@ -1,0 +1,13 @@
+[Unit]
+Description=Nfancurve service
+After=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/bin/sh /opt/nfancurve/temp.sh -c /opt/nfancurve/config
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=60s
+
+[Install]
+WantedBy=default.target

@@ -2,31 +2,92 @@
 
 source src/logging.sh
 
-#TODO: Need to automate update to ollama?
+#NOTE: This function install ollama but also it is update it with the same script
 install_ollama() {
-  log_info "Installing Ollama..."
-
   # Check if Ollama is already installed
   if command -v ollama &>/dev/null; then
-    log_info "Ollama is already installed"
-    return 0
+    local action="Updating"
+    log_info "$action Ollama..."
+  else
+    local action="Installing"
+    log_info "$action Ollama..."
   fi
 
   log_debug "Downloading and running Ollama install script..."
   # Execute curl command directly instead of passing it to log_cmd with pipes
   if ! curl -fsSL https://ollama.com/install.sh | sed 's/--add-repo/addrepo/' | sh; then
-    log_error "Failed to install Ollama"
+    log_error "Failed to $action Ollama"
     return 1
   fi
 
-  # Verify installation
+  # Verify installation/update
   if command -v ollama &>/dev/null; then
-    log_info "Ollama installation completed successfully"
+    log_info "Ollama ${action,,} completed successfully"
     return 0
   else
-    log_error "Ollama binary not found after installation"
+    log_error "Ollama binary not found after $action"
     return 1
   fi
+}
+
+#TEST: Needed
+nfancurve_setup() {
+  # send sh script to /opt/nfancurve/temp.sh
+  log_info "Sending nfancurve setup script to /opt/nfancurve/temp.sh..."
+
+  # dirs to sends
+  local dir_script="/opt/nfancurve/temp.sh"
+  local dir_service="/etc/systemd/system/nfancurve.service"
+  local dir_config="/opt/nfancurve/config"
+
+  # files on the repo going to copied
+  local nfancurve_config_file="./configs/nfancurve/config"
+  local nfancurve_script_file="./configs/nfancurve/temp.sh"
+  local nfancurve_service="./configs/nfancurve/nfancurve.service"
+
+  # check opt/nfancurve directory
+  if [ ! -d /opt/nfancurve ]; then
+    log_debug "Creating /opt/nfancurve directory..."
+    sudo mkdir -p /opt/nfancurve
+  fi
+
+  # copy script to /opt/nfancurve
+  if [ ! -f /opt/nfancurve/temp.sh ]; then
+    log_debug "Copying temp.sh to /opt/nfancurve..."
+    if ! sudo cp "$nfancurve_script_file" "$dir_script"; then
+      log_error "Failed to copy temp.sh to /opt/nfancurve"
+      return 1
+    fi
+  else
+    log_debug "temp.sh already exists in /opt/nfancurve"
+  fi
+  
+  # copy config to /opt/nfancurve/config
+  if [ ! -f /opt/nfancurve/config ]; then
+    log_debug "Copying config to /opt/nfancurve/config..."
+    if ! sudo cp "$nfancurve_config_file" "$dir_config"; then
+      log_error "Failed to copy config to /opt/nfancurve/config"
+      return 1
+    fi
+  else
+    log_debug "temp.sh already exists in /opt/nfancurve"
+  fi
+
+  # cp service
+  if ! sudo cp "$nfancurve_service" "$dir_service"; then
+    log_error "Failed to copy nfancurve service file"
+    return 1
+  fi
+
+  # enable service
+  log_debug "Enabling nfancurve service..."
+  if ! sudo systemctl enable --now nfancurve.service; then
+    log_error "Failed to enable nfancurve service"
+    return 1
+  fi
+
+  # end if everything is ok
+  log_info "nfancurve setup completed successfully"
 }
 
 #TEST: Currently only for desktop
@@ -35,9 +96,10 @@ borgbackup_setup() {
   log_info "Moving borgbackup script to /opt/borg/home-borgbackup.sh..."
 
   local dir_borg_script="/opt/borg/home-borgbackup.sh"
-  local borg_script_file="./configs/borg/home-borgbackup.sh"
   local dir_borg_timer="/etc/systemd/system/borgbackup-home.timer"
   local dir_borg_service="/etc/systemd/system/borgbackup-home.service"
+  
+  local borg_script_file="./configs/borg/home-borgbackup.sh"
   local borg_timer_file="./configs/borg/borgbackup-home.timer"
   local borg_service_file="./configs/borg/borgbackup-home.service"
 
@@ -46,6 +108,7 @@ borgbackup_setup() {
     log_debug "Creating /opt/borg directory..."
     sudo mkdir -p /opt/borg
   fi
+  
   # copy script to /opt/borg
   if [ ! -f /opt/borg/home-borgbackup.sh ]; then
     log_debug "Copying home-borgbackup.sh to /opt/borg..."
@@ -91,9 +154,7 @@ borgbackup_setup() {
   log_debug "Borgbackup timer is enabled and started"
 }
 
-# Autologin for gdm
-#NOTE: currently backlog
-#TODO: Need to make $USER variable
+# Autologin for gdm with machine-specific session
 gdm_auto_login() {
   log_info "Setting up GDM autologin..."
   local gdm_custom="/etc/gdm/custom.conf"
@@ -105,18 +166,35 @@ gdm_auto_login() {
   fi
 
   # Verify username is set
-  if [[ -z "$USER" ]]; then
-    log_error "USER environment variable is not set"
+  local config_user="${user:-$(whoami)}"
+  if [[ -z "$config_user" ]]; then
+    log_error "Unable to determine user for autologin"
     return 1
   fi
+
+  # Determine system type from hostname
+  local hostname
+  hostname=$(hostname 2>/dev/null || echo "unknown")
+  local session_value
+
+  # Determine which session to use based on system type
+  if [[ "$hostname" == "$hostname_desktop" ]]; then
+    session_value="${desktop_session:-qtile}"
+  elif [[ "$hostname" == "$hostname_laptop" ]]; then
+    session_value="${laptop_session:-hyprland}"
+  else
+    session_value="qtile" # Default if hostname doesn't match known types
+  fi
+
+  log_info "Setting up GDM autologin for user $config_user with session $session_value..."
 
   log_debug "Creating GDM configuration at $gdm_custom..."
   cat <<EOF | sudo tee "$gdm_custom" >/dev/null
 [daemon]
 WaylandEnable=false
-DefaultSession=qtile.desktop
+DefaultSession=${session_value}.desktop
 AutomaticLoginEnable=True
-AutomaticLogin=$USER
+AutomaticLogin=$config_user
 EOF
 
   # Verify file was created and has correct content
@@ -393,7 +471,7 @@ trash_cli_setup() {
   local dir_trash_cli_timer="/etc/systemd/system/trash-cli.timer"
   local trash_cli_service_file="./configs/trash-cli/trash-cli.service"
   local trash_cli_timer_file="./configs/trash-cli/trash-cli.timer"
-  
+
   # Create service file
   if ! sudo cp "$trash_cli_service_file" "$dir_trash_cli_service"; then
     log_error "Failed to copy trash-cli service file"

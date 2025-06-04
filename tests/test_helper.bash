@@ -51,7 +51,8 @@ create_mock_command() {
 mock_dnf() {
   local log_file="$1"
   
-  function sudo dnf() {
+  # Create a mock_sudo_dnf function with a valid name (no spaces)
+  function mock_sudo_dnf() {
     local cmd="$1"
     echo "Mock sudo dnf: $*" >> "$log_file"
     
@@ -87,7 +88,18 @@ mock_dnf() {
         ;;
     esac
   }
-  export -f sudo dnf
+  
+  # Create a wrapper for 'sudo' that delegates to mock_sudo_dnf for dnf commands
+  function sudo() {
+    if [[ "$1" == "dnf" ]]; then
+      mock_sudo_dnf "${@:2}"
+    else
+      command sudo "$@"
+    fi
+  }
+  
+  export -f mock_sudo_dnf
+  export -f sudo
 }
 
 # Create a mock systemctl command with common behaviors

@@ -1,0 +1,27 @@
+{
+  "user": "developer",
+  "laptop": {
+    "host": "fedora-laptop",
+    "ip": "192",
+    "session": "qtile"
+  },
+  "desktop": {
+    "host": "fedora",
+    "ip": "192",
+    "session": "qtile"
+  },
+  "hostnames": {
+    "desktop": "fedora",
+    "laptop": "fedora-laptop"
+  },
+  "browser": {
+    "firefox_profile": "sqwu9kep.default-release",
+    "firefox_profile_path": "/home/developer/.mozilla/firefox/sqwu9kep.default-release",
+    "librewolf_dir": "/home/developer/.librewolf/",
+    "librewolf_profile": "/home/developer/.librewolf/profiles.ini"
+  },
+  "system": {
+    "mirror_country": "de",
+    "repo_dir": "/etc/yum.repos.d"
+  }
+}
