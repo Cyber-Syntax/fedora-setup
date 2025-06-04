@@ -1,17 +1,5 @@
 # Bash Coding Rules
 
-# Development Guidelines
-
-- Use `fi` to close `if` statements. Don't use `}` to close `if` statements:
-
-```bash
-    if ! jq empty "$temp_file" 2>/dev/null; then
-        log_error "Generated invalid JSON when customizing variables.json"
-        rm -f "$temp_file"
-        return 1
-    fi # not }
-```
-
 # Project Structure
 
 - Use dnf packages over copr if available.

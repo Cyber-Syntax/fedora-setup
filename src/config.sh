@@ -394,6 +394,7 @@ create_default_packages_json() {
   ],
   "qtile": [
     "pactl",
+    "khal",
     "Xephyr",
     "lxpolkit",
     "xset",
