@@ -74,6 +74,7 @@ Experimental: Below functions are need to tested with caution.
   -z    Setup zenpower for Ryzen 5000 series
   -n    Install NVIDIA CUDA
   -N    Switch to nvidia-open drivers
+  -j    Setup nfancurve script for NVIDIA GPUs.
   -v    Setup VA-API for NVIDIA RTX series
   -p    Install ProtonVPN repository and enable OpenVPN for SELinux
   -o    Install Ollama with its install.sh script
@@ -391,9 +392,10 @@ main() {
   install_vscode_option=false
   setup_default_applications_option=false
   sddm_autologin_option=false
+  nfancurve_option=false
 
   # Process command-line options.
-  while getopts "abBcdDEFfghHIiAalLnNopPrstTuUvVzqQxCMSX" opt; do
+  while getopts "abBcdDEFfghHIiAalLjnNopPrstTuUvVzqQxCMSX" opt; do
     case $opt in
       a) all_option=true ;;
       A) install_app_packages_option=true ;;
@@ -432,6 +434,7 @@ main() {
       C) install_vscode_option=true ;;
       M) setup_default_applications_option=true ;;
       E) auto_cpufreq_option=true ;;
+      j) nfancurve_option=true ;;
       h) usage ;;
       *) usage ;;
     esac
@@ -474,7 +477,8 @@ main() {
     [[ "$sddm_option" == "false" ]] &&
     [[ "$sddm_autologin_option" == "false" ]] &&
     [[ "$auto_cpufreq_option" == "false" ]] &&
-    [[ "$setup_default_applications_option" == "false" ]]; then
+    [[ "$setup_default_applications_option" == "false" ]] &&
+    [[ "$nfancurve_option" == "false" ]]; then
     log_warn "No options specified"
     usage
   fi
@@ -534,6 +538,7 @@ main() {
       nvidia_cuda_setup
       vaapi_setup
       borgbackup_setup
+      nfancurve_setup
       # zenpower_setup #WARN: is it safe?
     fi
 
@@ -595,6 +600,7 @@ main() {
     if $hyprland_option; then install_hyprland; fi
     if $sddm_option; then switch_to_sddm; fi
     if $sddm_autologin_option; then sddm_autologin; fi
+    if $nfancurve_option; then nfancurve_setup; fi
   fi
 
   log_info "Script execution completed."

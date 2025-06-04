@@ -74,7 +74,7 @@ nfancurve_setup() {
   fi
 
   # cp service
-  if ! sudo cp "$nfancurve_service_file" "$dir_service"; then
+  if ! sudo cp "$nfancurve_service" "$dir_service"; then
     log_error "Failed to copy nfancurve service file"
     return 1
   fi
