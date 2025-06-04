@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v0.3.0-alpha
+### CHANGES
+New setups and improvements.
+
 ## v0.2.2-alpha
 ### BREAKING CHANGES
 - Users need to setup their config with script and change according to
