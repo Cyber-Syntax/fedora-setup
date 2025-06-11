@@ -343,6 +343,13 @@ lightdm_autologin() {
     # Write the new content to the file
     echo -e "$new_content" | sudo tee "$conf_file" >/dev/null
   fi
+  # pam setup for auto unlock gnome keyring
+  #TODO: handle this later
+  #NOTE: this isn't work with autologin because its need password on from display manager
+  #   # Gnome keyring auto unlock
+  # auth       optional     pam_gnome_keyring.so
+  # session    optional     pam_gnome_keyring.so auto_start
+  #
 
   log_success "LightDM autologin configuration completed"
   return 0

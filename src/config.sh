@@ -319,6 +319,7 @@ parse_json() {
 # Purpose: Create default packages.json configuration file
 # Arguments: $1 - Output file path
 # Returns: 0 on success, 1 on failure
+#TODO: Make function to install games too.
 create_default_packages_json() {
   local output_file="$1"
 
@@ -350,6 +351,9 @@ create_default_packages_json() {
     "chromium"
   ],
   "dev": [
+    "clamav",
+    "libsecret",
+    "libsecret-devel",
     "papirus-icon-theme",
     "git-credential-libsecret",
     "gh",
@@ -373,6 +377,7 @@ create_default_packages_json() {
     "yarnpkg",
     "bash-language-server",
     "python3-devel",
+    "python3-tkinter",
     "dbus-devel",
     "shfmt",
     "ShellCheck"
@@ -410,6 +415,11 @@ create_default_packages_json() {
     "flameshot",
     "playerctl",
     "xev"
+  ],
+  "games": [
+  "wine",
+  "wine-mono",
+  "lutris",
   ],
   "flatpak": [
     "org.signal.Signal",
