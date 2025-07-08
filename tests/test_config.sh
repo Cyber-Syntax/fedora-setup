@@ -264,11 +264,12 @@ load_package_arrays() {
   DEV_PACKAGES=("dev1" "dev2")
   DESKTOP_PACKAGES=("desktop1" "desktop2")
   LAPTOP_PACKAGES=("laptop1" "laptop2")
+  GAMES_PACKAGES=("game1" "game2")
   QTILE_PACKAGES=("feh" "picom" "i3lock")
   FLATPAK_PACKAGES=("app1" "app2")
   
   # Export arrays
-  export CORE_PACKAGES APPS_PACKAGES DEV_PACKAGES
+  export CORE_PACKAGES APPS_PACKAGES DEV_PACKAGES GAMES_PACKAGES
   export DESKTOP_PACKAGES LAPTOP_PACKAGES
   export QTILE_PACKAGES FLATPAK_PACKAGES
   
@@ -518,6 +519,7 @@ run_config_function() {
   grep -q '"browser"' "$test_file"
   grep -q '"system"' "$test_file"
 }
+
 # Test load_json_config with existing file
 @test "load_json_config returns path for existing file" {
   # Create a config dir and file directly in the test directory

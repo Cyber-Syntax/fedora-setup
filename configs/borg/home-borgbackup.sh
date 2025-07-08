@@ -1,15 +1,26 @@
-#!/bin/bash -e
-# Extract command
-# sudo borg extract --progress --list /mnt/backups/borgbackup/doc-repo::doc-27-02-2024
-#NOTE: this file need to be on /opt/borg/home-borgbackup.sh
+#!/usr/bin/env bash
+set -o errexit
+set -o nounset
+set -o pipefail
 
-export BORG_UKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes
+# Check prerequisites
+command -v borg >/dev/null 2>&1 || {
+  echo >&2 "Borg is not installed. Please install it first."
+  exit 1
+}
+[[ -d /mnt/backups/borgbackup ]] || {
+  echo >&2 "Backup directory does not exist."
+  exit 1
+}
 
-REPOSITORY_home='/mnt/backups/borgbackup/home-nixos'
+export BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK=yes
 
-echo "Starting backup"
-# home
-sudo borg create --list --filter=AME --progress --stats --exclude-caches --show-rc \
+borg_home_repo='/mnt/backups/borgbackup/home-repo'
+
+echo "Starting backup for home"
+
+# --show-rc: if return 0 code, then it's successful
+if ! sudo borg create --list --filter=AME --progress --stats --exclude-caches --show-rc \
   --exclude /home/*/Documents/backup-for-cloud/ \
   --exclude /home/*/.cache/ \
   --exclude /home/*Downloads/ \
@@ -25,33 +36,38 @@ sudo borg create --list --filter=AME --progress --stats --exclude-caches --show-
   --exclude /home/*/.tox/ \
   --exclude /home/*/.venv/ \
   --exclude /home/*/.backups/ \
-  --compression zstd,15 $REPOSITORY_home::'{now:home-developer-%d-%m-%Y}' \
-  /home/developer/
+  --compression zstd,15 $borg_home_repo::'{now:home-developer-%d-%m-%Y}' \
+  /home/developer/; then
+  echo "Backup of home directory failed" >&2
+  exit 1
+fi
 
 echo "Backup of home directory complete"
 
-echo "Pruning old home backups"
-
-# --show-rc: if return 0 code, then it's successful
-sudo borg prune -v $REPOSITORY_home --list --stats --show-rc \
+if ! sudo borg prune -v $borg_home_repo --list --stats --show-rc \
   --keep-daily=7 \
   --keep-weekly=4 \
-  --keep-monthly=2
+  --keep-monthly=2; then
+  echo "Pruning of home backups failed" >&2
+  exit 1
+fi
 
-sudo borg check $REPOSITORY_home
-# after check
-echo "Check complete"
+echo "Pruning of home backups complete"
 
-# compact the repository to free up the space
-sudo borg compact $REPOSITORY_home
+if ! sudo borg check $borg_home_repo; then
+  echo "Check of home backups failed" >&2
+  exit 1
+fi
+echo "borg check completed successfully"
+
+if ! sudo borg compact $borg_home_repo; then
+  echo "Compaction of home backups failed" >&2
+  exit 1
+fi
 
 echo "Compaction complete"
-# make sure to sync
+
+# Being paronoid here
 sync
 
-# if return = 'rc 0' then it's successful
-if [ $? -eq 0 ]; then
-  echo "Backup and prune complete!"
-else
-  echo "Backup and prune failed!"
-fi
+echo "Borg backup completed successfully"

@@ -124,6 +124,7 @@ needs_dnf_speedup() {
     $install_system_specific_packages_option ||
     $install_app_packages_option ||
     $install_dev_packages_option ||
+    $install_games_packages_option ||
     $librewolf_option ||
     $qtile_option ||
     $brave_option ||
@@ -224,6 +225,16 @@ install_dev_packages() {
   fi
 
   log_info "Development packages installation completed."
+}
+
+install_games_packages() {
+  log_info "Installing games..."
+  if ! sudo dnf install -y "${GAMES_PACKAGES[@]}"; then
+    log_error "Error: Failed to install games." >&2
+    return 1
+  fi
+
+  log_info "Games installation completed."
 }
 
 install_flatpak_packages() {
@@ -358,6 +369,7 @@ main() {
   install_system_specific_packages_option=false
   install_app_packages_option=false
   install_dev_packages_option=false
+  install_games_packages_option=false
   flatpak_option=false
   librewolf_option=false
   qtile_option=false
@@ -395,11 +407,12 @@ main() {
   nfancurve_option=false
 
   # Process command-line options.
-  while getopts "abBcdDEFfghHIiAalLjnNopPrstTuUvVzqQxCMSX" opt; do
+  while getopts "abBcdDEFfGghHIiAalLjnNopPrstTuUvVzqQxCMSX" opt; do
     case $opt in
       a) all_option=true ;;
       A) install_app_packages_option=true ;;
       D) install_dev_packages_option=true ;;
+      G) install_games_packages_option=true ;;
       b) brave_option=true ;;
       B) borgbackup_option=true ;;
       c) touchpad_option=true ;;
@@ -446,6 +459,7 @@ main() {
     [[ "$install_system_specific_packages_option" == "false" ]] &&
     [[ "$install_app_packages_option" == "false" ]] &&
     [[ "$install_dev_packages_option" == "false" ]] &&
+    [[ "$install_games_packages_option" == "false" ]] &&
     [[ "$flatpak_option" == "false" ]] &&
     [[ "$borgbackup_option" == "false" ]] &&
     [[ "$touchpad_option" == "false" ]] &&
@@ -521,6 +535,7 @@ main() {
     install_core_packages
     install_app_packages
     install_dev_packages
+    install_games_packages
     install_system_specific_packages "$system_type"
 
     # System-specific additional functions.
@@ -569,6 +584,7 @@ main() {
     if $install_core_packages_option; then install_core_packages; fi
     if $install_app_packages_option; then install_app_packages; fi
     if $install_dev_packages_option; then install_dev_packages; fi
+    if $install_games_packages_option; then install_games_packages; fi
     if $install_system_specific_packages_option; then install_system_specific_packages "$system_type"; fi
     if $touchpad_option; then touchpad_setup; fi
     if $flatpak_option; then install_flatpak_packages; fi

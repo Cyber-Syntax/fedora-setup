@@ -348,12 +348,21 @@ create_default_packages_json() {
     "neovim",
     "vim",
     "pavucontrol",
-    "chromium"
+    "chromium",
+    "gimp",
   ],
   "dev": [
+    "gparted",
+    "kernel-tools",
+    "kdiskmark",
+    "gitleaks",
+    "stow",
     "clamav",
+    "freshclam",
     "libsecret",
     "libsecret-devel",
+    "gnome-screenshot",
+    "openssh-askpass",
     "papirus-icon-theme",
     "git-credential-libsecret",
     "gh",
@@ -417,9 +426,12 @@ create_default_packages_json() {
     "xev"
   ],
   "games": [
-  "wine",
-  "wine-mono",
-  "lutris",
+    "wine",
+    "wine-mono",
+    "winetricks",
+    "lutris",
+    "steam",
+    "heroic-games-launcher-bin"
   ],
   "flatpak": [
     "org.signal.Signal",
@@ -964,6 +976,7 @@ load_package_arrays() {
   CORE_PACKAGES=($(parse_json "$packages_file" ".core[]"))
   APPS_PACKAGES=($(parse_json "$packages_file" ".apps[]"))
   DEV_PACKAGES=($(parse_json "$packages_file" ".dev[]"))
+  GAMES_PACKAGES=($(parse_json "$packages_file" ".games[]"))
   DESKTOP_PACKAGES=($(parse_json "$packages_file" ".desktop[]"))
   LAPTOP_PACKAGES=($(parse_json "$packages_file" ".laptop[]"))
   QTILE_PACKAGES=($(parse_json "$packages_file" ".qtile[]"))
@@ -1083,6 +1096,7 @@ init_config() {
   log_info "Qtile Packages: ${#QTILE_PACKAGES[@]} packages"
   log_info "Flatpak Packages: ${#FLATPAK_PACKAGES[@]} packages"
   log_info "Development Packages: ${#DEV_PACKAGES[@]} packages"
+  log_info "Games Packages: ${#GAMES_PACKAGES[@]} packages"
   log_info "Desktop Packages: ${#DESKTOP_PACKAGES[@]} packages"
   log_info "Laptop Packages: ${#LAPTOP_PACKAGES[@]} packages"
   log_info "===== End of Summary ====="
