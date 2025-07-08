@@ -113,14 +113,22 @@ teardown() {
   run bash -c "source $REPO_ROOT/src/logging.sh && LOG_FILE='$LOG_FILE' log_debug 'Debug message'"
   [ -z "$output" ]
   
-  # Capture info message (should appear)
+  # Capture info message (shouldn't appear in console)
   run bash -c "source $REPO_ROOT/src/logging.sh && LOG_FILE='$LOG_FILE' log_info 'Info message'"
+  [ -z "$output" ]
+  
+  # Capture warn message (should appear in console)
+  run bash -c "source $REPO_ROOT/src/logging.sh && LOG_FILE='$LOG_FILE' log_warn 'Warning message'"
   [ -n "$output" ]
   
-  # DEBUG level (everything should appear)
+  # Capture error message (should appear in console)
+  run bash -c "source $REPO_ROOT/src/logging.sh && LOG_FILE='$LOG_FILE' log_error 'Error message'"
+  [ -n "$output" ]
+  
+  # DEBUG level (only warn/error should appear in console)
   LOG_LEVEL=$LOG_LEVEL_DEBUG
   
-  # Capture debug message (should now appear)
+  # Capture debug message (shouldn't appear in console even at debug level)
   run bash -c "source $REPO_ROOT/src/logging.sh && LOG_LEVEL=$LOG_LEVEL_DEBUG LOG_FILE='$LOG_FILE' log_debug 'Debug message'"
-  [ -n "$output" ]
+  [ -z "$output" ]
 }

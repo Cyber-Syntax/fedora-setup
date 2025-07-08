@@ -319,6 +319,7 @@ parse_json() {
 # Purpose: Create default packages.json configuration file
 # Arguments: $1 - Output file path
 # Returns: 0 on success, 1 on failure
+#TODO: Make function to install games too.
 create_default_packages_json() {
   local output_file="$1"
 
@@ -347,9 +348,21 @@ create_default_packages_json() {
     "neovim",
     "vim",
     "pavucontrol",
-    "chromium"
+    "chromium",
+    "gimp",
   ],
   "dev": [
+    "gparted",
+    "kernel-tools",
+    "kdiskmark",
+    "gitleaks",
+    "stow",
+    "clamav",
+    "freshclam",
+    "libsecret",
+    "libsecret-devel",
+    "gnome-screenshot",
+    "openssh-askpass",
     "papirus-icon-theme",
     "git-credential-libsecret",
     "gh",
@@ -373,6 +386,7 @@ create_default_packages_json() {
     "yarnpkg",
     "bash-language-server",
     "python3-devel",
+    "python3-tkinter",
     "dbus-devel",
     "shfmt",
     "ShellCheck"
@@ -410,6 +424,14 @@ create_default_packages_json() {
     "flameshot",
     "playerctl",
     "xev"
+  ],
+  "games": [
+    "wine",
+    "wine-mono",
+    "winetricks",
+    "lutris",
+    "steam",
+    "heroic-games-launcher-bin"
   ],
   "flatpak": [
     "org.signal.Signal",
@@ -954,6 +976,7 @@ load_package_arrays() {
   CORE_PACKAGES=($(parse_json "$packages_file" ".core[]"))
   APPS_PACKAGES=($(parse_json "$packages_file" ".apps[]"))
   DEV_PACKAGES=($(parse_json "$packages_file" ".dev[]"))
+  GAMES_PACKAGES=($(parse_json "$packages_file" ".games[]"))
   DESKTOP_PACKAGES=($(parse_json "$packages_file" ".desktop[]"))
   LAPTOP_PACKAGES=($(parse_json "$packages_file" ".laptop[]"))
   QTILE_PACKAGES=($(parse_json "$packages_file" ".qtile[]"))
@@ -1073,6 +1096,7 @@ init_config() {
   log_info "Qtile Packages: ${#QTILE_PACKAGES[@]} packages"
   log_info "Flatpak Packages: ${#FLATPAK_PACKAGES[@]} packages"
   log_info "Development Packages: ${#DEV_PACKAGES[@]} packages"
+  log_info "Games Packages: ${#GAMES_PACKAGES[@]} packages"
   log_info "Desktop Packages: ${#DESKTOP_PACKAGES[@]} packages"
   log_info "Laptop Packages: ${#LAPTOP_PACKAGES[@]} packages"
   log_info "===== End of Summary ====="

@@ -58,7 +58,3 @@ Experimental: Below functions are need to tested with caution.
 Example:
 sudo $0 -a
 ```
-
-```
-
-```
