@@ -1,3 +1,7 @@
+# Archived Fedora Setup Script
+
+Use [auto-penguin-setup](https://github.com/Cyber-Syntax/auto-penguin-setup) for a more updated and maintained version of this script.
+
 # **⚠️ WARNING**
 
 I AM NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY THIS SCRIPT. USE AT YOUR OWN RISK.
